@@ -1,865 +1,304 @@
-from .amc_dl.torch_plus import PytorchModel
-from .amc_dl.torch_plus.train_utils import kl_with_normal
+from amc_dl.torch_plus import PytorchModel
+from amc_dl.torch_plus.train_utils import get_zs_from_dists, kl_with_normal
 import torch
 from torch import nn
-from .dl_modules import (
-    ChordEncoder,
-    ChordDecoder,
-    PianoTreeDecoder,
-    TextureEncoder,
-    FeatDecoder,
-)
-from .onsets_and_frames.transcription_utils import load_init_transcription_model
-from .onsets_and_frames import OnsetsAndFrames
+from torch.distributions import Normal
+import numpy as np
+from .dl_modules import ChordEncoder, ChordDecoder, PianoTreeDecoder, TextureEncoder
 
 
-class Audio2Symb(PytorchModel):
+class DisentangleVAE(PytorchModel):
+    def __init__(self, name, device, chd_encoder, rhy_encoder, pt_decoder, chd_decoder):
+        super(DisentangleVAE, self).__init__(name, device)
+        self.chd_encoder = chd_encoder
+        self.rhy_encoder = rhy_encoder
+        self.pt_decoder = pt_decoder
+        self.num_step = self.pt_decoder.num_step
+        self.chd_decoder = chd_decoder
 
-    """The proposed audio-to-symbolic C-VAE model."""
+    def confuse_prmat(self, pr_mat):
+        non_zero_ent = torch.nonzero(pr_mat.long())
+        eps = torch.randint(0, 2, (non_zero_ent.size(0),))
+        eps = ((2 * eps) - 1).long()
+        confuse_ent = torch.clamp(non_zero_ent[:, 2] + eps, min=0, max=127)
+        pr_mat[non_zero_ent[:, 0], non_zero_ent[:, 1], confuse_ent] = pr_mat[
+            non_zero_ent[:, 0], non_zero_ent[:, 1], non_zero_ent[:, 2]
+        ]
+        return pr_mat
 
-    writer_names = [
-        "loss",
-        "pno_tree_l",
-        "pitch_l",
-        "dur_l",
-        "kl_l",
-        "kl_chd",
-        "kl_aud",
-        "kl_sym",
-        "chord_l",
-        "root_l",
-        "chroma_l",
-        "bass_l",
-        "feat_l",
-        "bass_feat_l",
-        "int_feat_l",
-        "rhy_feat_l",
-        "beta",
-    ]
+    def get_chroma(self, pr_mat):
+        bs = pr_mat.size(0)
+        pad = torch.zeros(bs, 32, 4).to(self.device)
+        pr_mat = torch.cat([pr_mat, pad], dim=-1)
+        c = pr_mat.view(bs, 32, -1, 12).contiguous()
+        c = c.sum(dim=-2)  # (bs, 32, 12)
+        c = c.view(bs, 8, 4, 12)
+        c = c.sum(dim=-2).float()
+        c = torch.log(c + 1)
+        return c.to(self.device)
 
-    def __init__(
-        self,
-        name,
-        device,
-        chord_enc: ChordEncoder,
-        chord_dec: ChordDecoder,
-        transcriber: OnsetsAndFrames,
-        frame_enc: FrameEncoder3x153x88,
-        prmat_enc: TextureEncoder,
-        feat_dec: FeatDecoder,
-        pianotree_dec: PianoTreeDecoder,
-        stage=0,
-    ):
-        super(Audio2Symb, self).__init__(name, device)
-
-        self.chord_enc = chord_enc
-        self.chord_dec = chord_dec
-
-        # transcriber + frame_enc = audio encoder
-        self.transcriber = transcriber
-        self.frame_enc = frame_enc
-
-        # symbolic encoder
-        self.prmat_enc = prmat_enc
-
-        # feat_dec + pianotree_dec = symbolic decoder
-        self.feat_dec = feat_dec  # for symbolic feature recon
-        self.feat_emb_layer = nn.Linear(3, 64)
-        self.pianotree_dec = pianotree_dec
-
-        # {0: warmup, 1: pre-training, 2: fine-tuning-a, 3: fine-tuning-b}
-        assert stage in range(0, 4)
-        self.stage = stage
-
-    @property
-    def z_chd_dim(self):
-        return self.chord_enc.z_dim
-
-    @property
-    def z_aud_dim(self):
-        return self.frame_enc.z_dim
-
-    @property
-    def z_sym_dim(self):
-        return self.prmat_enc.z_dim
-
-    def transcriber_encode(self, spec):
-        """
-        Transcribe the input spectrogram to piano-roll predictions by calling
-        Returns onset, frame, velocity predictions (B, 3, 153, 88).
-        """
-
-        onset_pred, _, _, frame_pred, velocity = self.transcriber(spec.permute(0, 2, 1))
-        frames = torch.stack([onset_pred, frame_pred, velocity], 1)
-        return frames
-
-    def audio_enc(self, spec):
-        frames = self.transcriber_encode(spec)
-        dist_aud = self.frame_enc(frames)
-        return dist_aud
-
-    def run(self, pno_tree, chd, spec, pr_mat, feat, tfr1, tfr2, tfr3):
-        """
-        Forward path of the model in training (w/o computing loss).
-        """
-
-        # compute chord representation
-        dist_chd = self.chord_enc(chd)
-        z_chd = dist_chd.rsample()
-
-        # compute audio-texture representation
-        dist_aud = self.audio_enc(spec)
-        z_aud = dist_aud.rsample()
-
-        # compute symbolic-texture representation
-        if self.stage in [0, 1, 3]:
-            dist_sym = self.prmat_enc(pr_mat)
-            z_sym = dist_sym.rsample()
-        else:  # self.stage == 2 (fine-tuning stage), dist_sym abandoned.
-            with torch.no_grad():
-                dist_sym = torch.distributions.Normal(
-                    torch.zeros(
-                        z_aud.size(0),
-                        self.z_sym_dim,
-                        device=z_aud.device,
-                        dtype=z_aud.dtype,
-                    ),
-                    torch.ones(
-                        z_aud.size(0),
-                        self.z_sym_dim,
-                        device=z_aud.device,
-                        dtype=z_aud.dtype,
-                    )
-                    * 0.1,
-                )
-                z_sym = dist_sym.sample()
-
-        z = torch.cat([z_chd, z_aud, z_sym], -1)
-
-        # reconstruction of chord progression
-        recon_root, recon_chroma, recon_bass = self.chord_dec(z_chd, False, tfr3, chd)
-
-        # reconstruct symbolic feature using audio-texture repr.
-        recon_feat = self.feat_dec(z_aud, False, tfr1, feat)
-
-        # embed the reconstructed feature (without applying argmax)
-        feat_emb = self.feat_emb_layer(recon_feat)
-
-        # prepare the teacher-forcing data for pianotree decoder
-        embedded_pno_tree, pno_tree_lgths = self.pianotree_dec.emb_x(pno_tree)
-
-        # pianotree decoder
-        recon_pitch, recon_dur = self.pianotree_dec(
-            z, False, embedded_pno_tree, pno_tree_lgths, tfr1, tfr2, feat_emb
+    def run(self, x, c, pr_mat, tfr1, tfr2, tfr3, confuse=True):
+        # NOTE: dist means distribution
+        embedded_x, lengths = self.pt_decoder.emb_x(x)
+        # cc = self.get_chroma(pr_mat)
+        dist_chd = self.chd_encoder(c)
+        # pr_mat = self.confuse_prmat(pr_mat)
+        dist_rhy = self.rhy_encoder(pr_mat)
+        z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], True)
+        dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+        pitch_outs, dur_outs = self.pt_decoder(
+            dec_z, False, embedded_x, lengths, tfr1, tfr2
         )
-
+        recon_root, recon_chroma, recon_bass = self.chd_decoder(z_chd, False, tfr3, c)
         return (
-            recon_pitch,
-            recon_dur,
+            pitch_outs,
+            dur_outs,
+            dist_chd,
+            dist_rhy,
             recon_root,
             recon_chroma,
             recon_bass,
-            recon_feat,
-            dist_chd,
-            dist_aud,
-            dist_sym,
         )
 
     def loss_function(
         self,
-        pno_tree,
-        feat,
-        chd,
+        x,
+        c,
         recon_pitch,
         recon_dur,
+        dist_chd,
+        dist_rhy,
         recon_root,
         recon_chroma,
         recon_bass,
-        recon_feat,
-        dist_chd,
-        dist_aud,
-        dist_sym,
         beta,
         weights,
+        weighted_dur=False,
     ):
-        """Compute the loss from ground truth and the output of self.run()"""
-        # pianotree recon loss
-        pno_tree_l, pitch_l, dur_l = self.pianotree_dec.recon_loss(
-            pno_tree, recon_pitch, recon_dur, weights, False
+        recon_loss, pl, dl = self.pt_decoder.recon_loss(
+            x, recon_pitch, recon_dur, weights, weighted_dur
         )
-
-        # chord recon loss
-        chord_l, root_l, chroma_l, bass_l = self.chord_dec.recon_loss(
-            chd, recon_root, recon_chroma, recon_bass
+        kl_loss, kl_chd, kl_rhy = self.kl_loss(dist_chd, dist_rhy)
+        chord_loss, root, chroma, bass = self.chord_loss(
+            c, recon_root, recon_chroma, recon_bass
         )
-
-        # feature prediction loss
-        feat_l, bass_feat_l, int_feat_l, rhy_feat_l = self.feat_dec.recon_loss(
-            feat, recon_feat
-        )
-
-        # kl losses
-        kl_chd = kl_with_normal(dist_chd)
-        kl_aud = kl_with_normal(dist_aud)
-        kl_sym = kl_with_normal(dist_sym)
-
-        if self.stage == 0:
-            # beta keeps annealing from 0 - 0.01
-            kl_l = beta * (kl_chd + kl_aud + kl_sym)
-        elif self.stage == 1:
-            # beta keeps annealing from 0.01 - 0.5
-            kl_l = 0.01 * kl_chd + 0.01 * kl_aud + beta * kl_sym
-        elif self.stage == 2:
-            # kl_sym is not computed because symbolic input is abandoned.
-            kl_l = 0.01 * kl_chd + 0.01 * kl_aud
-        else:  # self.stage == 3
-            # autoregressive fine-tuning
-            kl_l = 0.01 * kl_chd + 0.01 * kl_aud + 0.5 * kl_sym
-
-        loss = pno_tree_l + chord_l + feat_l + kl_l
-
+        loss = recon_loss + beta * kl_loss + chord_loss
         return (
             loss,
-            pno_tree_l,
-            pitch_l,
-            dur_l,
-            kl_l,
+            recon_loss,
+            pl,
+            dl,
+            kl_loss,
             kl_chd,
-            kl_aud,
-            kl_sym,
-            chord_l,
-            root_l,
-            chroma_l,
-            bass_l,
-            feat_l,
-            bass_feat_l,
-            int_feat_l,
-            rhy_feat_l,
-            torch.tensor(beta),
+            kl_rhy,
+            chord_loss,
+            root,
+            chroma,
+            bass,
         )
+
+    def chord_loss(self, c, recon_root, recon_chroma, recon_bass):
+        loss_fun = nn.CrossEntropyLoss()
+        root = c[:, :, 0:12].max(-1)[-1].view(-1).contiguous()
+        chroma = c[:, :, 12:24].long().view(-1).contiguous()
+        bass = c[:, :, 24:].max(-1)[-1].view(-1).contiguous()
+
+        recon_root = recon_root.view(-1, 12).contiguous()
+        recon_chroma = recon_chroma.view(-1, 2).contiguous()
+        recon_bass = recon_bass.view(-1, 12).contiguous()
+        root_loss = loss_fun(recon_root, root)
+        chroma_loss = loss_fun(recon_chroma, chroma)
+        bass_loss = loss_fun(recon_bass, bass)
+        chord_loss = root_loss + chroma_loss + bass_loss
+        return chord_loss, root_loss, chroma_loss, bass_loss
+
+    def kl_loss(self, *dists):
+        # kl = kl_with_normal(dists[0])
+        kl_chd = kl_with_normal(dists[0])
+        kl_rhy = kl_with_normal(dists[1])
+        kl_loss = kl_chd + kl_rhy
+        return kl_loss, kl_chd, kl_rhy
 
     def loss(
         self,
-        pno_tree,
-        chd,
-        spec,
+        x,
+        c,
         pr_mat,
-        feat,
-        tfr1,
-        tfr2,
-        tfr3,
+        dt_x,
+        tfr1=0.0,
+        tfr2=0.0,
+        tfr3=0.0,
         beta=0.1,
         weights=(1, 0.5),
     ):
-        """
-        Forward path during training with loss computation.
+        outputs = self.run(x, c, pr_mat, tfr1, tfr2, tfr3)
+        loss = self.loss_function(x, c, *outputs, beta, weights)
+        return loss
 
-        :param pno_tree: (B, 32, 16, 6) ground truth for teacher forcing
-        :param chd: (B, 8, 36) chord input
-        :param spec: (B, 229, 153) audio input.
-            Log mel-spectrogram. (n_mels=229)
-        :param pr_mat: (B, 32, 128) (with proper corruption) symbolic input.
-        :param feat: (B, 32, 3) ground truth for teacher forcing
-        :param tfr1: teacher forcing ratio 1 (1st-hierarchy RNNs except chord)
-        :param tfr2: teacher forcing ratio 2 (2nd-hierarchy RNNs except chord)
-        :param tfr3: teacher forcing ratio 3 (for chord decoder)
-        :param beta: kl annealing parameter
-        :param weights: weighting parameter for pitch and dur in PianoTree.
-        :return: losses (first argument is the total loss.)
-        """
+    # def inference(self, c, pr_mat):
+    #     self.eval()
+    #     with torch.no_grad():
+    #         dist_chd = self.chd_encoder(c)
+    #         # pr_mat = self.confuse_prmat(pr_mat)
+    #         dist_rhy = self.rhy_encoder(pr_mat)
+    #         z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], True)
+    #         dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+    #         pitch_outs, dur_outs = self.decoder(dec_z, True, None,
+    #                                             None, 0., 0.)
+    #         est_x, _, _ = self.decoder.output_to_numpy(pitch_outs, dur_outs)
+    #     return est_x
+    #
+    # def swap(self, c1, c2, pr_mat1, pr_mat2, fix_rhy, fix_chd):
+    #     pr_mat = pr_mat1 if fix_rhy else pr_mat2
+    #     c = c1 if fix_chd else c2
+    #     est_x = self.inference(c, pr_mat)
+    #     return est_x
 
-        (
-            recon_pitch,
-            recon_dur,
-            recon_root,
-            recon_chroma,
-            recon_bass,
-            recon_feat,
-            dist_chd,
-            dist_aud,
-            dist_sym,
-        ) = self.run(pno_tree, chd, spec, pr_mat, feat, tfr1, tfr2, tfr3)
-
-        return self.loss_function(
-            pno_tree,
-            feat,
-            chd,
-            recon_pitch,
-            recon_dur,
-            recon_root,
-            recon_chroma,
-            recon_bass,
-            recon_feat,
-            dist_chd,
-            dist_aud,
-            dist_sym,
-            beta,
-            weights,
-        )
-
-    @classmethod
-    def init_model(
-        cls,
-        stage,
-        z_chd_dim=128,
-        z_aud_dim=192,
-        z_sym_dim=192,
-        transcriber_path=None,
-        model_path=None,
-    ):
-        """Fast model initialization."""
-
-        name = "audio2midi"
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        chord_enc = ChordEncoder(36, 256, z_chd_dim)
-        chord_dec = ChordDecoder(z_dim=z_chd_dim)
-
-        if transcriber_path is None:
-            transcriber = load_init_transcription_model(device)
-        else:
-            transcriber = load_init_transcription_model(device)
-            dic = torch.load(transcriber_path, map_location=device)
-            transcriber.load_state_dict(dic)
-
-        frame_enc = FrameEncoder3x153x88(z_dim=z_aud_dim)
-
-        prmat_enc = TextureEncoder(z_dim=z_sym_dim)
-
-        feat_dec = FeatDecoder(z_dim=z_aud_dim)
-
-        z_pt_dim = z_chd_dim + z_aud_dim + z_sym_dim
-        pianotree_dec = PianoTreeDecoder(z_size=z_pt_dim, feat_emb_dim=64)
-
-        model = cls(
-            name,
-            device,
-            chord_enc,
-            chord_dec,
-            transcriber,
-            frame_enc,
-            prmat_enc,
-            feat_dec,
-            pianotree_dec,
-            stage,
-        ).to(device)
-        if model_path is not None:
-            model.load_model(model_path=model_path, map_location=device)
-        return model
-
-    def inference(self, audio, chord, sym_prompt=None):
-        """
-        Forward path during inference. By default, symbolic source is not used.
-
-        :param audio: (B, 229, 153) audio input.
-            Log mel-spectrogram. (n_mels=229)
-        :param chord: (B, 8, 36) chord input
-        :param sym_prompt: (B, 32, 128) symbolic prompt.
-            By default, None.
-        :return: pianotree prediction (B, 32, 15, 6) numpy array.
-        """
-
+    def inference_encode(self, pr_mat, c):
         self.eval()
         with torch.no_grad():
-            z_chd = self.chord_enc(chord).mean
-            z_aud = self.audio_enc(audio).mean
+            dist_chd = self.chd_encoder(c)
+            dist_rhy = self.rhy_encoder(pr_mat)
+        return dist_chd, dist_rhy
 
-            z_sym = (
-                torch.zeros(
-                    z_aud.size(0),
-                    self.z_sym_dim,
-                    dtype=z_aud.dtype,
-                    device=z_aud.device,
-                )
-                if sym_prompt is None
-                else self.prmat_enc(sym_prompt).mean
-            )
-
-            z = torch.cat([z_chd, z_aud, z_sym], -1)
-
-            recon_feat = self.feat_dec(z_aud, True, 0.0, None)
-            feat_emb = self.feat_emb_layer(recon_feat)
-            recon_pitch, recon_dur = self.pianotree_dec(
-                z, True, None, None, 0.0, 0.0, feat_emb
-            )
-
-        # convert to (argmax) pianotree format, numpy array.
-        pred = self.pianotree_dec.output_to_numpy(recon_pitch.cpu(), recon_dur.cpu())[0]
-        return pred
-
-
-class Audio2SymbNoChord(PytorchModel):
-
-    """
-    A simplified proposed model w/o chord representation.
-    The model should have comparable generation quality.
-    - The advantage is there is no need to do chord extraction.
-    - The disadvantage is compositional style transfer is no longer possible.
-    """
-
-    writer_names = [
-        "loss",
-        "pno_tree_l",
-        "pitch_l",
-        "dur_l",
-        "kl_l",
-        "kl_aud",
-        "kl_sym",
-        "feat_l",
-        "bass_feat_l",
-        "int_feat_l",
-        "rhy_feat_l",
-        "beta",
-    ]
-
-    def __init__(
-        self,
-        name,
-        device,
-        transcriber: OnsetsAndFrames,
-        frame_enc: FrameEncoder3x153x88,
-        prmat_enc: TextureEncoder,
-        feat_dec: FeatDecoder,
-        pianotree_dec: PianoTreeDecoder,
-        stage=0,
-    ):
-        super(Audio2SymbNoChord, self).__init__(name, device)
-
-        # transcriber + frame_enc = audio encoder
-        self.transcriber = transcriber
-        self.frame_enc = frame_enc
-
-        # symbolic encoder
-        self.prmat_enc = prmat_enc
-
-        # feat_dec + pianotree_dec = symbolic decoder
-        self.feat_dec = feat_dec  # for symbolic feature recon
-        self.feat_emb_layer = nn.Linear(3, 64)
-        self.pianotree_dec = pianotree_dec
-
-        # {0: warmup, 1: pre-training, 2: fine-tuning-a, 3: fine-tuning-b}
-        assert stage in range(0, 4)
-        self.stage = stage
-
-    @property
-    def z_aud_dim(self):
-        return self.frame_enc.z_dim
-
-    @property
-    def z_sym_dim(self):
-        return self.prmat_enc.z_dim
-
-    def transcriber_encode(self, spec):
-        """
-        Transcribe the input spectrogram to piano-roll predictions by calling
-        Returns onset, frame, velocity predictions (B, 3, 153, 88).
-        """
-
-        onset_pred, _, _, frame_pred, velocity = self.transcriber(spec.permute(0, 2, 1))
-        frames = torch.stack([onset_pred, frame_pred, velocity], 1)
-        return frames
-
-    def audio_enc(self, spec):
-        frames = self.transcriber_encode(spec)
-        dist_aud = self.frame_enc(frames)
-        return dist_aud
-
-    def run(self, pno_tree, spec, pr_mat, feat, tfr1, tfr2):
-        """
-        Forward path of the model in training (w/o computing loss).
-        """
-
-        # compute audio-texture representation
-        dist_aud = self.audio_enc(spec)
-        z_aud = dist_aud.rsample()
-
-        # compute symbolic-texture representation
-        if self.stage in [0, 1, 3]:
-            dist_sym = self.prmat_enc(pr_mat)
-            z_sym = dist_sym.rsample()
-        else:  # self.stage == 2 (fine-tuning stage), dist_sym abandoned.
-            with torch.no_grad():
-                dist_sym = torch.distributions.Normal(
-                    torch.zeros(
-                        z_aud.size(0),
-                        self.z_sym_dim,
-                        device=z_aud.device,
-                        dtype=z_aud.dtype,
-                    ),
-                    torch.ones(
-                        z_aud.size(0),
-                        self.z_sym_dim,
-                        device=z_aud.device,
-                        dtype=z_aud.dtype,
-                    )
-                    * 0.1,
-                )
-                z_sym = dist_sym.sample()
-
-        z = torch.cat([z_aud, z_sym], -1)
-
-        # reconstruct symbolic feature using audio-texture repr.
-        recon_feat = self.feat_dec(z_aud, False, tfr1, feat)
-
-        # embed the reconstructed feature (without applying argmax)
-        feat_emb = self.feat_emb_layer(recon_feat)
-
-        # prepare the teacher-forcing data for pianotree decoder
-        embedded_pno_tree, pno_tree_lgths = self.pianotree_dec.emb_x(pno_tree)
-
-        # pianotree decoder
-        recon_pitch, recon_dur = self.pianotree_dec(
-            z, False, embedded_pno_tree, pno_tree_lgths, tfr1, tfr2, feat_emb
-        )
-
-        return recon_pitch, recon_dur, recon_feat, dist_aud, dist_sym
-
-    def loss_function(
-        self,
-        pno_tree,
-        feat,
-        recon_pitch,
-        recon_dur,
-        recon_feat,
-        dist_aud,
-        dist_sym,
-        beta,
-        weights,
-    ):
-        """Compute the loss from ground truth and the output of self.run()"""
-        # pianotree recon loss
-        pno_tree_l, pitch_l, dur_l = self.pianotree_dec.recon_loss(
-            pno_tree, recon_pitch, recon_dur, weights, False
-        )
-
-        # feature prediction loss
-        feat_l, bass_feat_l, int_feat_l, rhy_feat_l = self.feat_dec.recon_loss(
-            feat, recon_feat
-        )
-
-        # kl losses
-        kl_aud = kl_with_normal(dist_aud)
-        kl_sym = kl_with_normal(dist_sym)
-
-        if self.stage == 0:
-            # beta keeps annealing from 0 - 0.01
-            kl_l = beta * (kl_aud + kl_sym)
-        elif self.stage == 1:
-            # beta keeps annealing from 0.01 - 0.5
-            kl_l = 0.01 * kl_aud + beta * kl_sym
-        elif self.stage == 2:
-            # kl_sym is not computed because symbolic input is abandoned.
-            kl_l = 0.01 * kl_aud
-        else:  # self.stage == 3
-            # autoregressive fine-tuning
-            kl_l = 0.01 * kl_aud + 0.5 * kl_sym
-
-        loss = pno_tree_l + feat_l + kl_l
-
-        return (
-            loss,
-            pno_tree_l,
-            pitch_l,
-            dur_l,
-            kl_l,
-            kl_aud,
-            kl_sym,
-            feat_l,
-            bass_feat_l,
-            int_feat_l,
-            rhy_feat_l,
-            torch.tensor(beta),
-        )
-
-    def loss(
-        self,
-        pno_tree,
-        chd,
-        spec,
-        pr_mat,
-        feat,
-        tfr1,
-        tfr2,
-        tfr3,
-        beta=0.1,
-        weights=(1, 0.5),
-    ):
-        """
-        Forward path during training with loss computation.
-
-        :param pno_tree: (B, 32, 16, 6) ground truth for teacher forcing
-        :param chd: ignored.
-        :param spec: (B, 229, 153) audio input.
-            Log mel-spectrogram. (n_mels=229)
-        :param pr_mat: (B, 32, 128) (with proper corruption) symbolic input.
-        :param feat: (B, 32, 3) ground truth for teacher forcing
-        :param tfr1: teacher forcing ratio 1 (1st-hierarchy RNNs except chord)
-        :param tfr2: teacher forcing ratio 2 (2nd-hierarchy RNNs except chord)
-        :param tfr3: ignored.
-        :param beta: kl annealing parameter
-        :param weights: weighting parameter for pitch and dur in PianoTree.
-        :return: losses (first argument is the total loss.)
-        """
-
-        recon_pitch, recon_dur, recon_feat, dist_aud, dist_sym = self.run(
-            pno_tree, spec, pr_mat, feat, tfr1, tfr2
-        )
-
-        return self.loss_function(
-            pno_tree,
-            feat,
-            recon_pitch,
-            recon_dur,
-            recon_feat,
-            dist_aud,
-            dist_sym,
-            beta,
-            weights,
-        )
-
-    @classmethod
-    def init_model(
-        cls, stage, z_aud_dim=320, z_sym_dim=192, transcriber_path=None, model_path=None
-    ):
-        """Fast model initialization."""
-
-        name = "audio2midi-nochord"
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        if transcriber_path is None:
-            transcriber = load_init_transcription_model(device)
-        else:
-            transcriber = load_init_transcription_model(device)
-            dic = torch.load(transcriber_path, map_location=device)
-            transcriber.load_state_dict(dic)
-
-        frame_enc = FrameEncoder3x153x88(z_dim=z_aud_dim)
-
-        prmat_enc = TextureEncoder(z_dim=z_sym_dim)
-
-        feat_dec = FeatDecoder(z_dim=z_aud_dim)
-
-        z_pt_dim = z_aud_dim + z_sym_dim
-        pianotree_dec = PianoTreeDecoder(z_size=z_pt_dim, feat_emb_dim=64)
-
-        model = cls(
-            name,
-            device,
-            transcriber,
-            frame_enc,
-            prmat_enc,
-            feat_dec,
-            pianotree_dec,
-            stage,
-        ).to(device)
-        if model_path is not None:
-            model.load_model(model_path=model_path, map_location=device)
-        return model
-
-    def inference(self, audio, sym_prompt=None):
-        """
-        Forward path during inference. By default, symbolic source is not used.
-
-        :param audio: (B, 229, 153) audio input.
-            Log mel-spectrogram. (n_mels=229)
-        :param sym_prompt: (B, 32, 128) symbolic prompt.
-            By default, None.
-        :return: pianotree prediction (B, 32, 15, 6) numpy array.
-        """
-
+    def inference_decode(self, z_chd, z_rhy):
         self.eval()
         with torch.no_grad():
-            z_aud = self.audio_enc(audio).mean
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            pitch_outs, dur_outs = self.pt_decoder(dec_z, True, None, None, 0.0, 0.0)
+            est_x, _, _ = self.pt_decoder.output_to_numpy(pitch_outs, dur_outs)
+        return est_x
 
-            z_sym = (
-                torch.zeros(
-                    z_aud.size(0),
-                    self.z_sym_dim,
-                    dtype=z_aud.dtype,
-                    device=z_aud.device,
-                )
-                if sym_prompt is None
-                else self.prmat_enc(sym_prompt).mean
-            )
-
-            z = torch.cat([z_aud, z_sym], -1)
-
-            recon_feat = self.feat_dec(z_aud, True, 0.0, None)
-            feat_emb = self.feat_emb_layer(recon_feat)
-            recon_pitch, recon_dur = self.pianotree_dec(
-                z, True, None, None, 0.0, 0.0, feat_emb
-            )
-
-        # convert to (argmax) pianotree format, numpy array.
-        pred = self.pianotree_dec.output_to_numpy(recon_pitch.cpu(), recon_dur.cpu())[0]
-        return pred
-
-
-class Audio2SymbSupervised(PytorchModel):
-
-    """
-    A naive supervised approach for audio-to-symbolic arrangement.
-    Since audio is measured in frame while symbolic is measured in 16-th note,
-      we still use a bottle-neck, or latent representation. The bottle-neck
-      is or is not constrained by a kl loss.
-    Equivalently, this is simply a seq2seq model structure with or without kl
-      penalty.
-    """
-
-    writer_names = ["loss", "pno_tree_l", "pitch_l", "dur_l", "kl_l", "beta"]
-
-    def __init__(
-        self,
-        name,
-        device,
-        transcriber: OnsetsAndFrames,
-        frame_enc: FrameEncoder3x153x88,
-        pianotree_dec: PianoTreeDecoder,
-        kl_penalty=False,
-    ):
-        super(Audio2SymbSupervised, self).__init__(name, device)
-
-        # transcriber + frame_enc = audio encoder
-        self.transcriber = transcriber
-        self.frame_enc = frame_enc
-
-        self.pianotree_dec = pianotree_dec
-        self.kl_penalty = kl_penalty
-
-    @property
-    def z_aud_dim(self):
-        return self.frame_enc.z_dim
-
-    def transcriber_encode(self, spec):
-        """
-        Transcribe the input spectrogram to piano-roll predictions by calling
-        Returns onset, frame, velocity predictions (B, 3, 153, 88).
-        """
-
-        onset_pred, _, _, frame_pred, velocity = self.transcriber(spec.permute(0, 2, 1))
-        frames = torch.stack([onset_pred, frame_pred, velocity], 1)
-        return frames
-
-    def audio_enc(self, spec):
-        frames = self.transcriber_encode(spec)
-        dist_aud = self.frame_enc(frames)
-        return dist_aud
-
-    def run(self, pno_tree, spec, pr_mat, feat, tfr1, tfr2):
-        """
-        Forward path of the model in training (w/o computing loss).
-        """
-
-        # compute audio-texture representation
-        dist_z = self.audio_enc(spec)
-        z = dist_z.rsample() if self.kl_penalty else dist_z.mean
-
-        # prepare the teacher-forcing data for pianotree decoder
-        embedded_pno_tree, pno_tree_lgths = self.pianotree_dec.emb_x(pno_tree)
-
-        # pianotree decoder
-        recon_pitch, recon_dur = self.pianotree_dec(
-            z, False, embedded_pno_tree, pno_tree_lgths, tfr1, tfr2, None
-        )
-
-        return recon_pitch, recon_dur, dist_z
-
-    def loss_function(self, pno_tree, recon_pitch, recon_dur, dist_z, beta, weights):
-        """Compute the loss from ground truth and the output of self.run()"""
-        # pianotree recon loss
-        pno_tree_l, pitch_l, dur_l = self.pianotree_dec.recon_loss(
-            pno_tree, recon_pitch, recon_dur, weights, False
-        )
-
-        # kl losses
-        kl_l = kl_with_normal(dist_z)
-
-        loss = pno_tree_l + beta * kl_l if self.kl_penalty else pno_tree_l
-
-        return loss, pno_tree_l, pitch_l, dur_l, kl_l, torch.tensor(beta)
-
-    def loss(
-        self,
-        pno_tree,
-        chd,
-        spec,
-        pr_mat,
-        feat,
-        tfr1,
-        tfr2,
-        tfr3,
-        beta=0.1,
-        weights=(1, 0.5),
-    ):
-        """
-        Forward path during training with loss computation.
-
-        :param pno_tree: (B, 32, 16, 6) ground truth for teacher forcing
-        :param chd: ignored.
-        :param spec: (B, 229, 153) audio input.
-            Log mel-spectrogram. (n_mels=229)
-        :param pr_mat: ignored
-        :param feat: ignored
-        :param tfr1: teacher forcing ratio 1 (1st-hierarchy RNNs except chord)
-        :param tfr2: teacher forcing ratio 2 (2nd-hierarchy RNNs except chord)
-        :param tfr3: ignored.
-        :param beta: kl annealing parameter
-        :param weights: weighting parameter for pitch and dur in PianoTree.
-        :return: losses (first argument is the total loss.)
-        """
-
-        recon_pitch, recon_dur, dist_z = self.run(
-            pno_tree, spec, pr_mat, feat, tfr1, tfr2
-        )
-
-        return self.loss_function(
-            pno_tree, recon_pitch, recon_dur, dist_z, beta, weights
-        )
-
-    @classmethod
-    def init_model(
-        cls, kl_penalty=False, z_dim=512, transcriber_path=None, model_path=None
-    ):
-        """Fast model initialization."""
-
-        name = "audio2midi-supervised"
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        if transcriber_path is None:
-            transcriber = load_init_transcription_model(device)
-        else:
-            transcriber = load_init_transcription_model(device)
-            dic = torch.load(transcriber_path, map_location=device)
-            transcriber.load_state_dict(dic)
-
-        frame_enc = FrameEncoder3x153x88(z_dim=z_dim)
-
-        pianotree_dec = PianoTreeDecoder(z_size=z_dim, feat_emb_dim=0)
-
-        model = cls(
-            name, device, transcriber, frame_enc, pianotree_dec, kl_penalty=kl_penalty
-        ).to(device)
-        if model_path is not None:
-            model.load_model(model_path=model_path, map_location=device)
-        return model
-
-    def inference(self, audio):
-        """
-        Forward path during inference. By default, symbolic source is not used.
-
-        :param audio: (B, 229, 153) audio input.
-            Log mel-spectrogram. (n_mels=229)
-        :return: pianotree prediction (B, 32, 15, 6) numpy array.
-        """
-
+    def inference(self, pr_mat, c, sample):
         self.eval()
         with torch.no_grad():
-            z = self.audio_enc(audio).mean
+            dist_chd = self.chd_encoder(c)
+            dist_rhy = self.rhy_encoder(pr_mat)
+            z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], sample)
+            dec_z = torch.cat([z_chd, z_rhy], dim=-1)
+            pitch_outs, dur_outs = self.pt_decoder(dec_z, True, None, None, 0.0, 0.0)
+            est_x, _, _ = self.pt_decoder.output_to_numpy(pitch_outs, dur_outs)
+        return est_x
 
-            recon_pitch, recon_dur = self.pianotree_dec(
-                z, True, None, None, 0.0, 0.0, None
+    def swap(self, pr_mat1, pr_mat2, c1, c2, fix_rhy, fix_chd):
+        pr_mat = pr_mat1 if fix_rhy else pr_mat2
+        c = c1 if fix_chd else c2
+        est_x = self.inference(pr_mat, c, sample=False)
+        return est_x
+
+    def posterior_sample(self, pr_mat, c, scale=None, sample_chd=True, sample_txt=True):
+        if scale is None and sample_chd and sample_txt:
+            est_x = self.inference(pr_mat, c, sample=True)
+        else:
+            dist_chd, dist_rhy = self.inference_encode(pr_mat, c)
+            if scale is not None:
+                mean_chd = dist_chd.mean
+                mean_rhy = dist_rhy.mean
+                # std_chd = torch.ones_like(dist_chd.mean) * scale
+                # std_rhy = torch.ones_like(dist_rhy.mean) * scale
+                std_chd = dist_chd.scale * scale
+                std_rhy = dist_rhy.scale * scale
+                dist_rhy = Normal(mean_rhy, std_rhy)
+                dist_chd = Normal(mean_chd, std_chd)
+            z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], True)
+            if not sample_chd:
+                z_chd = dist_chd.mean
+            if not sample_txt:
+                z_rhy = dist_rhy.mean
+            est_x = self.inference_decode(z_chd, z_rhy)
+        return est_x
+
+    def prior_sample(self, x, c, sample_chd=False, sample_rhy=False, scale=1.0):
+        dist_chd, dist_rhy = self.inference_encode(x, c)
+        mean = torch.zeros_like(dist_rhy.mean)
+        loc = torch.ones_like(dist_rhy.mean) * scale
+        if sample_chd:
+            dist_chd = Normal(mean, loc)
+        if sample_rhy:
+            dist_rhy = Normal(mean, loc)
+        z_chd, z_rhy = get_zs_from_dists([dist_chd, dist_rhy], True)
+        return self.inference_decode(z_chd, z_rhy)
+
+    def gt_sample(self, x):
+        out = x[:, :, 1:].numpy()
+        return out
+
+    def interp(
+        self, pr_mat1, c1, pr_mat2, c2, interp_chd=False, interp_rhy=False, int_count=10
+    ):
+        dist_chd1, dist_rhy1 = self.inference_encode(pr_mat1, c1)
+        dist_chd2, dist_rhy2 = self.inference_encode(pr_mat2, c2)
+        [z_chd1, z_rhy1, z_chd2, z_rhy2] = get_zs_from_dists(
+            [dist_chd1, dist_rhy1, dist_chd2, dist_rhy2], False
+        )
+        if interp_chd:
+            z_chds = self.interp_z(z_chd1, z_chd2, int_count)
+        else:
+            z_chds = z_chd1.unsqueeze(1).repeat(1, int_count, 1)
+        if interp_rhy:
+            z_rhys = self.interp_z(z_rhy1, z_rhy2, int_count)
+        else:
+            z_rhys = z_rhy1.unsqueeze(1).repeat(1, int_count, 1)
+        bs = z_chds.size(0)
+        z_chds = z_chds.view(bs * int_count, -1).contiguous()
+        z_rhys = z_rhys.view(bs * int_count, -1).contiguous()
+        estxs = self.inference_decode(z_chds, z_rhys)
+        return estxs.reshape((bs, int_count, 32, 15, -1))
+
+    def interp_z(self, z1, z2, int_count=10):
+        z1 = z1.numpy()
+        z2 = z2.numpy()
+        zs = torch.stack(
+            [self.interp_path(zz1, zz2, int_count) for zz1, zz2 in zip(z1, z2)], dim=0
+        )
+        return zs
+
+    def interp_path(self, z1, z2, interpolation_count=10):
+        result_shape = z1.shape
+        z1 = z1.reshape(-1)
+        z2 = z2.reshape(-1)
+
+        def slerp2(p0, p1, t):
+            omega = np.arccos(np.dot(p0 / np.linalg.norm(p0), p1 / np.linalg.norm(p1)))
+            so = np.sin(omega)
+            return (
+                np.sin((1.0 - t) * omega)[:, None] / so * p0[None]
+                + np.sin(t * omega)[:, None] / so * p1[None]
             )
 
-        # convert to (argmax) pianotree format, numpy array.
-        pred = self.pianotree_dec.output_to_numpy(recon_pitch.cpu(), recon_dur.cpu())[0]
-        return pred
+        percentages = np.linspace(0.0, 1.0, interpolation_count)
+
+        normalized_z1 = z1 / np.linalg.norm(z1)
+        normalized_z2 = z2 / np.linalg.norm(z2)
+        dirs = slerp2(normalized_z1, normalized_z2, percentages)
+        length = np.linspace(
+            np.log(np.linalg.norm(z1)), np.log(np.linalg.norm(z2)), interpolation_count
+        )
+        out = (dirs * np.exp(length[:, None])).reshape(
+            [interpolation_count] + list(result_shape)
+        )
+        # out = np.array([(1 - t) * z1 + t * z2 for t in percentages])
+        return torch.from_numpy(out).to(self.device).float()
+
+    @staticmethod
+    def init_model(device=None, chd_size=256, txt_size=256, num_channel=10):
+        name = "disvae"
+        if device is None:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # chd_encoder = RnnEncoder(36, 1024, 256)
+        chd_encoder = ChordEncoder(36, 1024, chd_size)
+        # rhy_encoder = TextureEncoder(256, 1024, 256)
+        rhy_encoder = TextureEncoder(256, 1024, txt_size, num_channel)
+        # pt_encoder = PtvaeEncoder(device=device, z_size=152)
+        # chd_decoder = RnnDecoder(z_dim=256)
+        chd_decoder = ChordDecoder(z_dim=chd_size)
+        # pt_decoder = PtvaeDecoder(note_embedding=None,
+        #                           dec_dur_hid_size=64, z_size=512)
+        pt_decoder = PianoTreeDecoder(
+            note_embedding=None, dec_dur_hid_size=64, z_size=chd_size + txt_size
+        )
+
+        model = DisentangleVAE(
+            name, device, chd_encoder, rhy_encoder, pt_decoder, chd_decoder
+        )
+        return model
