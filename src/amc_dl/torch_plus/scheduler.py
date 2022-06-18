@@ -1,16 +1,16 @@
 import numpy as np
 from .train_utils import scheduled_sampling
 
-class _Scheduler:
 
-    def __init__(self, step=0, mode='train'):
+class _Scheduler:
+    def __init__(self, step=0, mode="train"):
         self._step = step
         self._mode = mode
 
     def _update_step(self):
-        if self._mode == 'train':
+        if self._mode == "train":
             self._step += 1
-        elif self._mode == 'val':
+        elif self._mode == "val":
             pass
         else:
             raise NotImplementedError
@@ -19,15 +19,14 @@ class _Scheduler:
         raise NotImplementedError
 
     def train(self):
-        self._mode = 'train'
+        self._mode = "train"
 
     def eval(self):
-        self._mode = 'val'
+        self._mode = "val"
 
 
 class ConstantScheduler(_Scheduler):
-
-    def __init__(self, param, step=0.):
+    def __init__(self, param, step=0.0):
         super(ConstantScheduler, self).__init__(step)
         self.param = param
 
@@ -37,7 +36,6 @@ class ConstantScheduler(_Scheduler):
 
 
 class TeacherForcingScheduler(_Scheduler):
-
     def __init__(self, high, low, f=scheduled_sampling, step=0):
         super(TeacherForcingScheduler, self).__init__(step)
         self.high = high
@@ -55,7 +53,6 @@ class TeacherForcingScheduler(_Scheduler):
 
 
 class OptimizerScheduler(_Scheduler):
-
     def __init__(self, optimizer, scheduler, clip, step=0):
         # optimizer and scheduler are pytorch class
         super(OptimizerScheduler, self).__init__(step)
@@ -75,20 +72,19 @@ class OptimizerScheduler(_Scheduler):
 
 
 class ParameterScheduler(_Scheduler):
-
-    def __init__(self, step=0, mode='train', **schedulers):
+    def __init__(self, step=0, mode="train", **schedulers):
         # optimizer and scheduler are pytorch class
         super(ParameterScheduler, self).__init__(step)
         self.schedulers = schedulers
         self.mode = mode
 
     def train(self):
-        self.mode = 'train'
+        self.mode = "train"
         for scheduler in self.schedulers.values():
             scheduler.train()
 
     def eval(self):
-        self.mode = 'val'
+        self.mode = "val"
         for scheduler in self.schedulers.values():
             scheduler.eval()
 
@@ -97,8 +93,3 @@ class ParameterScheduler(_Scheduler):
         for key, scheduler in self.schedulers.items():
             params_dic[key] = scheduler.step()
         return params_dic
-
-
-
-
-

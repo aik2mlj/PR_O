@@ -3,11 +3,9 @@ from torch.distributions import Normal
 
 
 class RnnEncoder(nn.Module):
-
     def __init__(self, input_dim, hidden_dim, z_dim):
         super(RnnEncoder, self).__init__()
-        self.gru = nn.GRU(input_dim, hidden_dim, batch_first=True,
-                          bidirectional=True)
+        self.gru = nn.GRU(input_dim, hidden_dim, batch_first=True, bidirectional=True)
         self.linear_mu = nn.Linear(hidden_dim * 2, z_dim)
         self.linear_var = nn.Linear(hidden_dim * 2, z_dim)
         self.input_dim = input_dim

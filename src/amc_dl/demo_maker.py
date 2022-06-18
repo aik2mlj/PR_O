@@ -13,14 +13,14 @@ def add_notes(track, shift_second):
     notes = []
     ss = 0
     for i, seg in enumerate(track):
-        notes += [pretty_midi.Note(n.velocity, n.pitch,
-                                   n.start + ss, n.end + ss)
-                  for n in seg]
+        notes += [
+            pretty_midi.Note(n.velocity, n.pitch, n.start + ss, n.end + ss) for n in seg
+        ]
         ss += shift_second
     return notes
 
 
-def demo_to_midi(data, names, bpm=90., shift_second=None, shift_beat=None):
+def demo_to_midi(data, names, bpm=90.0, shift_second=None, shift_beat=None):
     alpha = bpm_to_alpha(bpm)
     if shift_second is None:
         shift_second = alpha * shift_beat
@@ -32,8 +32,6 @@ def demo_to_midi(data, names, bpm=90., shift_second=None, shift_beat=None):
     return midi
 
 
-def write_demo(fn, data, names, bpm=90., shift_second=None, shift_beat=None):
+def write_demo(fn, data, names, bpm=90.0, shift_second=None, shift_beat=None):
     midi = demo_to_midi(data, names, bpm, shift_second, shift_beat)
     midi.write(fn)
-
-

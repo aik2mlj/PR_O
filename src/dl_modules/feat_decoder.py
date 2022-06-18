@@ -4,15 +4,15 @@ import random
 
 
 class FeatDecoder(nn.Module):
-
-    def __init__(self, z_input_dim=128,
-                 hidden_dim=1024, z_dim=512, n_step=32, output_dim=3):
+    def __init__(
+        self, z_input_dim=128, hidden_dim=1024, z_dim=512, n_step=32, output_dim=3
+    ):
         super(FeatDecoder, self).__init__()
         self.z2dec_hid = nn.Linear(z_dim, hidden_dim)
         self.z2dec_in = nn.Linear(z_dim, z_input_dim)
-        self.gru = nn.GRU(output_dim + z_input_dim, hidden_dim,
-                          batch_first=True,
-                          bidirectional=False)
+        self.gru = nn.GRU(
+            output_dim + z_input_dim, hidden_dim, batch_first=True, bidirectional=False
+        )
         self.init_input = nn.Parameter(torch.rand(output_dim))
         self.hidden_dim = hidden_dim
         self.z_dim = z_dim
@@ -34,15 +34,14 @@ class FeatDecoder(nn.Module):
         z_in = self.z2dec_in(z).unsqueeze(1)
 
         if inference:
-            tfr = 0.
+            tfr = 0.0
 
         token = self.init_input.repeat(bs, 1).unsqueeze(1)
 
         out_feats = []
 
         for t in range(self.n_step):
-            y_t, z_hid = \
-                self.gru(torch.cat([token, z_in], dim=-1), z_hid)
+            y_t, z_hid = self.gru(torch.cat([token, z_in], dim=-1), z_hid)
 
             out_feat = self.out(y_t)  # (bs, 1, 3)
 

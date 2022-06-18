@@ -1,7 +1,13 @@
 from .dirs import *
-from .amc_dl.torch_plus import LogPathManager, SummaryWriters, \
-    ParameterScheduler, OptimizerScheduler, MinExponentialLR, \
-    TeacherForcingScheduler, ConstantScheduler
+from .amc_dl.torch_plus import (
+    LogPathManager,
+    SummaryWriters,
+    ParameterScheduler,
+    OptimizerScheduler,
+    MinExponentialLR,
+    TeacherForcingScheduler,
+    ConstantScheduler,
+)
 from .amc_dl.torch_plus.module import TrainingInterface
 import torch
 from torch import optim
@@ -10,14 +16,24 @@ from .utils import beta_annealing, scheduled_sampling
 
 
 class TrainingVAE(TrainingInterface):
-
     def _batch_to_inputs(self, batch):
         return batch
 
 
-def train_model(model, data_loaders, stage, readme_fn, n_epoch, parallel,
-                lr=1e-3, writer_names=None, load_data_at_start=False,
-                beta=0.1, run_epochs=None, result_path=None):
+def train_model(
+    model,
+    data_loaders,
+    stage,
+    readme_fn,
+    n_epoch,
+    parallel,
+    lr=1e-3,
+    writer_names=None,
+    load_data_at_start=False,
+    beta=0.1,
+    run_epochs=None,
+    result_path=None,
+):
     """
     :param model: A2S model. Possibly loaded with pre-trained parameters.
     :param data_loaders: dataset.AudioMidiDataLoaders
@@ -39,7 +55,7 @@ def train_model(model, data_loaders, stage, readme_fn, n_epoch, parallel,
             _ = dst[item]
 
     # constants
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     clip = 3
 
@@ -47,8 +63,11 @@ def train_model(model, data_loaders, stage, readme_fn, n_epoch, parallel,
 
     tf_rates = [(0.8, 0.3), (0.8, 0.5), (0.5, 0)]
 
-    parallel = parallel if torch.cuda.is_available() and \
-        torch.cuda.device_count() > 1 else False
+    parallel = (
+        parallel
+        if torch.cuda.is_available() and torch.cuda.device_count() > 1
+        else False
+    )
 
     if load_data_at_start:
         for dataset in [data_loaders.train_set, data_loaders.val_set]:
@@ -58,39 +77,46 @@ def train_model(model, data_loaders, stage, readme_fn, n_epoch, parallel,
     if not os.path.exists(result_path):
         os.mkdir(result_path)
 
-    log_path_mng = \
-        LogPathManager(readme_fn,
-                       log_path_name=os.path.join(result_path, 'result'))
+    log_path_mng = LogPathManager(
+        readme_fn, log_path_name=os.path.join(result_path, "result")
+    )
 
     optimizer = optim.Adam(model.parameters(), lr=lr)
     scheduler = MinExponentialLR(optimizer, gamma=0.9999, minimum=lr * 1e-2)
     optimizer_scheduler = OptimizerScheduler(optimizer, scheduler, clip)
 
-    tags = {'loss': None}
-    summary_writers = SummaryWriters(writer_names, tags,
-                                     log_path_mng.writer_path)
-    tfr1_scheduler = TeacherForcingScheduler(*tf_rates[0],
-                                             f=scheduled_sampling)
-    tfr2_scheduler = TeacherForcingScheduler(*tf_rates[1],
-                                             f=scheduled_sampling)
-    tfr3_scheduler = TeacherForcingScheduler(*tf_rates[2],
-                                             f=scheduled_sampling)
+    tags = {"loss": None}
+    summary_writers = SummaryWriters(writer_names, tags, log_path_mng.writer_path)
+    tfr1_scheduler = TeacherForcingScheduler(*tf_rates[0], f=scheduled_sampling)
+    tfr2_scheduler = TeacherForcingScheduler(*tf_rates[1], f=scheduled_sampling)
+    tfr3_scheduler = TeacherForcingScheduler(*tf_rates[2], f=scheduled_sampling)
     weights_scheduler = ConstantScheduler(weights)
 
     if stage >= 1:
         beta_scheduler = TeacherForcingScheduler(beta, 0.01, f=beta_annealing)
     else:
-        beta_scheduler = TeacherForcingScheduler(beta, 0., f=beta_annealing)
+        beta_scheduler = TeacherForcingScheduler(beta, 0.0, f=beta_annealing)
 
-    params_dic = dict(tfr1=tfr1_scheduler, tfr2=tfr2_scheduler,
-                      tfr3=tfr3_scheduler,
-                      beta=beta_scheduler,
-                      weights=weights_scheduler)
+    params_dic = dict(
+        tfr1=tfr1_scheduler,
+        tfr2=tfr2_scheduler,
+        tfr3=tfr3_scheduler,
+        beta=beta_scheduler,
+        weights=weights_scheduler,
+    )
     param_scheduler = ParameterScheduler(**params_dic)
 
-    training = TrainingVAE(device, model, parallel, log_path_mng,
-                           data_loaders, summary_writers, optimizer_scheduler,
-                           param_scheduler, n_epoch)
+    training = TrainingVAE(
+        device,
+        model,
+        parallel,
+        log_path_mng,
+        data_loaders,
+        summary_writers,
+        optimizer_scheduler,
+        param_scheduler,
+        n_epoch,
+    )
 
     # Run through the epochs already endured. Similar to (but still different
     # from) loading specific training checkpoints.

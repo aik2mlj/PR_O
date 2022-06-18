@@ -7,7 +7,9 @@ class BiLSTM(nn.Module):
 
     def __init__(self, input_features, recurrent_features):
         super().__init__()
-        self.rnn = nn.LSTM(input_features, recurrent_features, batch_first=True, bidirectional=True)
+        self.rnn = nn.LSTM(
+            input_features, recurrent_features, batch_first=True, bidirectional=True
+        )
 
     def forward(self, x):
         if self.training:
@@ -20,7 +22,12 @@ class BiLSTM(nn.Module):
 
             h = torch.zeros(num_directions, batch_size, hidden_size, device=x.device)
             c = torch.zeros(num_directions, batch_size, hidden_size, device=x.device)
-            output = torch.zeros(batch_size, sequence_length, num_directions * hidden_size, device=x.device)
+            output = torch.zeros(
+                batch_size,
+                sequence_length,
+                num_directions * hidden_size,
+                device=x.device,
+            )
 
             # forward direction
             slices = range(0, sequence_length, self.inference_chunk_length)

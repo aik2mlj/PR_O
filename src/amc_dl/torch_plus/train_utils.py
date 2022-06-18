@@ -10,8 +10,8 @@ def epoch_time(start_time, end_time):
     return elapsed_mins, elapsed_secs
 
 
-def join_fn(*items, ext='pt'):
-    return '.'.join(['_'.join(items), ext])
+def join_fn(*items, ext="pt"):
+    return ".".join(["_".join(items), ext])
 
 
 def scheduled_sampling(i, high=0.7, low=0.05):
@@ -22,7 +22,7 @@ def scheduled_sampling(i, high=0.7, low=0.05):
     return y
 
 
-def kl_anealing(i, high=0.1, low=0.):
+def kl_anealing(i, high=0.1, low=0.0):
     i /= 1000 * 40  # new update
     hh = 1 - low
     ll = 1 - high
@@ -53,5 +53,3 @@ def kl_with_normal(dist):
 
 def kl_between_dists(dist1, dist2):
     return kl_divergence(dist1, dist2).mean()
-
-

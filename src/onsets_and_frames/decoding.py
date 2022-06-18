@@ -46,7 +46,9 @@ def extract_notes(onsets, frames, velocity, onset_threshold=0.5, frame_threshold
         if offset > onset:
             pitches.append(pitch)
             intervals.append([onset, offset])
-            velocities.append(np.mean(velocity_samples) if len(velocity_samples) > 0 else 0)
+            velocities.append(
+                np.mean(velocity_samples) if len(velocity_samples) > 0 else 0
+            )
 
     return np.array(pitches), np.array(intervals), np.array(velocities)
 

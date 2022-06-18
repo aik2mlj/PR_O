@@ -9,7 +9,7 @@ class MinExponentialLR(ExponentialLR):
 
     def get_lr(self):
         return [
-            max(base_lr * self.gamma ** self.last_epoch, self.min)
+            max(base_lr * self.gamma**self.last_epoch, self.min)
             for base_lr in self.base_lrs
         ]
 
@@ -31,7 +31,7 @@ class NoamOpt(OptimizerScheduler):
         "Update parameters and rate"
         rate = self.rate()
         for p in self.optimizer.param_groups:
-            p['lr'] = rate
+            p["lr"] = rate
         self._rate = rate
         self.optimizer.step()
         if require_zero_grad:
@@ -42,9 +42,7 @@ class NoamOpt(OptimizerScheduler):
         "Implement `lrate` above"
         if step is None:
             step = self._step
-        return self.factor * \
-               (self.model_size ** (-0.5) *
-                min((step + 1) ** (-0.5), (step + 1) * self.warmup ** (-1.5)))
-
-
-
+        return self.factor * (
+            self.model_size ** (-0.5)
+            * min((step + 1) ** (-0.5), (step + 1) * self.warmup ** (-1.5))
+        )

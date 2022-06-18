@@ -3,19 +3,18 @@ from torch.distributions import Normal
 
 
 class TextureEncoder(nn.Module):
-
-    def __init__(self, emb_size=256, hidden_dim=1024, z_dim=256,
-                 num_channel=10, return_h=False):
+    def __init__(
+        self, emb_size=256, hidden_dim=1024, z_dim=256, num_channel=10, return_h=False
+    ):
         super(TextureEncoder, self).__init__()
-        self.cnn = nn.Sequential(nn.Conv2d(1, num_channel, kernel_size=(4, 12),
-                                           stride=(4, 1), padding=0),
-                                 nn.ReLU(),
-                                 nn.MaxPool2d(kernel_size=(1, 4),
-                                              stride=(1, 4)))
+        self.cnn = nn.Sequential(
+            nn.Conv2d(1, num_channel, kernel_size=(4, 12), stride=(4, 1), padding=0),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=(1, 4), stride=(1, 4)),
+        )
         self.fc1 = nn.Linear(num_channel * 29, 1000)
         self.fc2 = nn.Linear(1000, emb_size)
-        self.gru = nn.GRU(emb_size, hidden_dim, batch_first=True,
-                          bidirectional=True)
+        self.gru = nn.GRU(emb_size, hidden_dim, batch_first=True, bidirectional=True)
         self.linear_mu = nn.Linear(hidden_dim * 2, z_dim)
         self.linear_var = nn.Linear(hidden_dim * 2, z_dim)
         self.emb_size = emb_size

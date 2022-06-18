@@ -2,8 +2,12 @@ import torch
 from torchaudio.transforms import MelScale
 from torch.utils.data import Dataset, DataLoader
 from .data_sample import TrainDataSample
-from .utils import pianotree_pitch_shift, \
-    chd_pitch_shift, chd_to_onehot, pr_mat_pitch_shift
+from .utils import (
+    pianotree_pitch_shift,
+    chd_pitch_shift,
+    chd_to_onehot,
+    pr_mat_pitch_shift,
+)
 from .amc_dl.torch_plus import DataLoaders
 from .audio_sp_modules.my_collate import default_collate
 from .audio_sp_modules.pitch_shift import pitch_shift_to_spec
@@ -12,15 +16,13 @@ from .utils import read_split_dict
 
 
 class AudioMidiDataset(Dataset):
-
     def __init__(self, data_samples):
 
         # a list of data_sample.TrainDataSample
         self.data_samples = data_samples
 
         # a list of complete sample counts in each song
-        self.lgths = np.array([len(d) for d in self.data_samples],
-                              dtype=np.int64)
+        self.lgths = np.array([len(d) for d in self.data_samples], dtype=np.int64)
 
         self.lgth_cumsum = np.cumsum(self.lgths)
 
@@ -39,15 +41,15 @@ class AudioMidiDataset(Dataset):
     @classmethod
     def load_with_song_ids(cls, song_ids, **kwargs):
         """song_ids: a list of int/str"""
-        data_samples = [TrainDataSample(song_id, **kwargs)
-                        for song_id in song_ids]
+        data_samples = [TrainDataSample(song_id, **kwargs) for song_id in song_ids]
         return cls(data_samples=data_samples)
 
     @classmethod
     def load_with_train_valid_ids(cls, tv_song_ids, **kwargs):
         """tv_song_ids: a tuple of (train_song_ids, valid_song_ids)"""
-        return cls.load_with_song_ids(tv_song_ids[0], **kwargs), \
-            cls.load_with_song_ids(tv_song_ids[1], **kwargs)
+        return cls.load_with_song_ids(tv_song_ids[0], **kwargs), cls.load_with_song_ids(
+            tv_song_ids[1], **kwargs
+        )
 
     @classmethod
     def load_train_and_valid_sets(cls, meter, n_subdiv, **kwargs):
@@ -59,8 +61,7 @@ class AudioMidiDataset(Dataset):
             To select subset of pieces having 2 or 3-based subdivision.
             None means all.
         """
-        return cls.load_with_train_valid_ids(read_split_dict(meter, n_subdiv),
-                                             **kwargs)
+        return cls.load_with_train_valid_ids(read_split_dict(meter, n_subdiv), **kwargs)
 
 
 def collate_fn(batch, device, augment_p, mel_scale):
@@ -103,41 +104,57 @@ def collate_fn(batch, device, augment_p, mel_scale):
     feat = None if feat is None else feat.float().to(device)
 
     # augment audio on possibly cuda
-    audio = pitch_shift_to_spec(audio, TGT_SR, aug_shift, mel_scale,
-                                n_fft=N_FFT,
-                                hop_length=HOP_LGTH)
+    audio = pitch_shift_to_spec(
+        audio, TGT_SR, aug_shift, mel_scale, n_fft=N_FFT, hop_length=HOP_LGTH
+    )
 
     return pno_tree, chd, audio, pr_mat, feat
 
 
-def create_data_loader(dataset, batch_size, shuffle, aug_p, device,
-                       num_workers=0):
-    """ create a pytorch data loader with customized collate_fn. """
-    mel_scale = MelScale(n_mels=N_MELS, sample_rate=INPUT_SR, f_min=F_MIN,
-                         f_max=F_MAX, n_stft=N_FFT // 2 + 1).to(device)
-    return DataLoader(dataset, batch_size, shuffle, num_workers=num_workers,
-                      collate_fn=lambda b:
-                      collate_fn(b, device, aug_p, mel_scale))
+def create_data_loader(dataset, batch_size, shuffle, aug_p, device, num_workers=0):
+    """create a pytorch data loader with customized collate_fn."""
+    mel_scale = MelScale(
+        n_mels=N_MELS,
+        sample_rate=INPUT_SR,
+        f_min=F_MIN,
+        f_max=F_MAX,
+        n_stft=N_FFT // 2 + 1,
+    ).to(device)
+    return DataLoader(
+        dataset,
+        batch_size,
+        shuffle,
+        num_workers=num_workers,
+        collate_fn=lambda b: collate_fn(b, device, aug_p, mel_scale),
+    )
 
 
 class AudioMidiDataLoaders(DataLoaders):
 
-    """ Dataloaders containing train and valid dataloaders. """
+    """Dataloaders containing train and valid dataloaders."""
 
     def batch_to_inputs(self, batch):
         return batch
 
     @classmethod
-    def get_loaders(cls, bs_train, bs_val, train_dataset, val_dataset,
-                    shuffle_train=True, shuffle_val=False, aug_p=None,
-                    num_workers=0):
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        train_loader = \
-            create_data_loader(train_dataset, bs_train, shuffle_train,
-                               aug_p, device, num_workers)
-        val_loader = \
-            create_data_loader(val_dataset, bs_val, shuffle_val, None,
-                               device, num_workers)
+    def get_loaders(
+        cls,
+        bs_train,
+        bs_val,
+        train_dataset,
+        val_dataset,
+        shuffle_train=True,
+        shuffle_val=False,
+        aug_p=None,
+        num_workers=0,
+    ):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        train_loader = create_data_loader(
+            train_dataset, bs_train, shuffle_train, aug_p, device, num_workers
+        )
+        val_loader = create_data_loader(
+            val_dataset, bs_val, shuffle_val, None, device, num_workers
+        )
         return cls(train_loader, val_loader, bs_train, bs_val, device)
 
     @property
@@ -149,16 +166,30 @@ class AudioMidiDataLoaders(DataLoaders):
         return self.val_loader.dataset
 
 
-def create_data_loaders(batch_size, num_workers=0, meter=2, n_subdiv=2,
-                        shuffle_train=True, shuffle_val=False, **kwargs):
+def create_data_loaders(
+    batch_size,
+    num_workers=0,
+    meter=2,
+    n_subdiv=2,
+    shuffle_train=True,
+    shuffle_val=False,
+    **kwargs
+):
     """Fast data loaders initialization."""
 
-    train_dataset, valid_dataset = \
-        AudioMidiDataset.load_train_and_valid_sets(
-            meter, n_subdiv, **kwargs)
+    train_dataset, valid_dataset = AudioMidiDataset.load_train_and_valid_sets(
+        meter, n_subdiv, **kwargs
+    )
 
     aug_p = AUG_P / AUG_P.sum()
 
     return AudioMidiDataLoaders.get_loaders(
-        batch_size, batch_size,train_dataset, valid_dataset,
-        shuffle_train, shuffle_val, aug_p, num_workers)
+        batch_size,
+        batch_size,
+        train_dataset,
+        valid_dataset,
+        shuffle_train,
+        shuffle_val,
+        aug_p,
+        num_workers,
+    )

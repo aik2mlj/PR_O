@@ -1,7 +1,13 @@
 from .dirs import *
 from .constants import *
-from .utils import read_dict, nmat_to_pianotree_repr, nmat_to_pr_mat_repr, \
-    nmat_to_rhy_array, compute_pr_mat_feat, corrupt_pr_mat
+from .utils import (
+    read_dict,
+    nmat_to_pianotree_repr,
+    nmat_to_pr_mat_repr,
+    nmat_to_rhy_array,
+    compute_pr_mat_feat,
+    corrupt_pr_mat,
+)
 from .utils import str_song_id
 import torch
 import glob
@@ -24,7 +30,7 @@ class SongNpz:
     def __init__(self, song_id):
         song_id = str_song_id(song_id)
         self.song_id = song_id
-        self.npz_fn = os.path.join(QUANTIZED_DATA_DIR, song_id + '.npz')
+        self.npz_fn = os.path.join(QUANTIZED_DATA_DIR, song_id + ".npz")
 
         # the attributes in the npz file. Initialized to None.
         # melody, bridge, and piano tracks
@@ -57,9 +63,19 @@ class SongNpz:
         # an array of complete downbeats.
         self.filtered_db_pos = None
 
-    def load(self, melody=False, bridge=False, piano=False, beat_lookup=False,
-             chord_lookup=False, beat_secs=False, db_pos=False,
-             db_pos_filter=False, filtered_db_pos=False, start_table=False):
+    def load(
+        self,
+        melody=False,
+        bridge=False,
+        piano=False,
+        beat_lookup=False,
+        chord_lookup=False,
+        beat_secs=False,
+        db_pos=False,
+        db_pos_filter=False,
+        filtered_db_pos=False,
+        start_table=False,
+    ):
         """
         A function to load data. Parameter is True means to load, and not to
         otherwise.
@@ -67,23 +83,24 @@ class SongNpz:
 
         data = np.load(self.npz_fn)
 
-        self.melody = data['melody'] if melody else None
-        self.bridge = data['bridge'] if bridge else None
-        self.piano = data['piano'] if piano else None
+        self.melody = data["melody"] if melody else None
+        self.bridge = data["bridge"] if bridge else None
+        self.piano = data["piano"] if piano else None
 
-        self.beat_lookup = data['beat_lookup'] if beat_lookup else None
-        self.chord_lookup = data['chord_lookup'] if chord_lookup else None
+        self.beat_lookup = data["beat_lookup"] if beat_lookup else None
+        self.chord_lookup = data["chord_lookup"] if chord_lookup else None
 
-        self.beat_secs = data['beat_positions'] if beat_secs else None
+        self.beat_secs = data["beat_positions"] if beat_secs else None
 
-        db_pos_val = data['db_pos']
-        db_pos_filter_val = data['db_pos_filter']
+        db_pos_val = data["db_pos"]
+        db_pos_filter_val = data["db_pos_filter"]
         self.db_pos = db_pos_val if db_pos else None
         self.db_pos_filter = db_pos_filter_val if db_pos_filter else None
-        self.filtered_db_pos = db_pos_val[db_pos_filter_val] \
-            if filtered_db_pos else None
+        self.filtered_db_pos = (
+            db_pos_val[db_pos_filter_val] if filtered_db_pos else None
+        )
 
-        self.start_table = data['start_table'] if start_table else None
+        self.start_table = data["start_table"] if start_table else None
 
     @staticmethod
     def cat_note_mats(note_mats):
@@ -101,12 +118,11 @@ class SongNpz:
 
         s_ind = self.start_table[db][trk_nos]
         e_ind = self.start_table[db + SEG_LGTH][trk_nos]
-        seg_mats = [mat[s: e] for s, e, mat in zip(s_ind, e_ind, note_mats)]
+        seg_mats = [mat[s:e] for s, e, mat in zip(s_ind, e_ind, note_mats)]
         return seg_mats
 
     def brg_pno_at_db(self, db):
-        brg_mat, pno_mat = \
-            self.note_mats_at_db(db, [self.bridge, self.piano], [1, 2])
+        brg_mat, pno_mat = self.note_mats_at_db(db, [self.bridge, self.piano], [1, 2])
         return brg_mat.copy(), pno_mat.copy()
 
     def mel_at_db(self, db):
@@ -143,12 +159,10 @@ class SongFolder:
         song_id = str_song_id(song_id)
         self.song_id = song_id
         self.folder = self.match_song_folder()
-        self.acc_path = os.path.join(self.folder, 'split_audio',
-                                     'accompaniment.wav')
+        self.acc_path = os.path.join(self.folder, "split_audio", "accompaniment.wav")
 
     def match_song_folder(self):
-        return glob.glob(os.path.join(COMBINED_DATA_DIR,
-                                      f'{self.song_id}*'))[0]
+        return glob.glob(os.path.join(COMBINED_DATA_DIR, f"{self.song_id}*"))[0]
 
 
 class SongStretched:
@@ -168,10 +182,12 @@ class SongStretched:
         song_id = str_song_id(song_id)
         self.audio_stretched_path = STRETCHED_AUDIO_NPY_PATH
         self.song_id = song_id
-        self.stretched_wav_path = \
-            os.path.join(self.audio_stretched_path, self.song_id + '.wav')
-        self.stretched_dict_path = \
-            os.path.join(self.audio_stretched_path, self.song_id + '.pickle')
+        self.stretched_wav_path = os.path.join(
+            self.audio_stretched_path, self.song_id + ".wav"
+        )
+        self.stretched_dict_path = os.path.join(
+            self.audio_stretched_path, self.song_id + ".pickle"
+        )
         self.stretched_wav = None
         self.stretched_dict = None
 
@@ -204,6 +220,7 @@ class AudioMidiSampleTemplate:
         raise NotImplementedError
 
     """Attributes in self.song_npz"""
+
     @property
     def song_id(self):
         return self.song_npz.song_id
@@ -233,11 +250,13 @@ class AudioMidiSampleTemplate:
         return self.song_npz.filtered_db_pos
 
     """Attributes in self.song_folder"""
+
     @property
     def acc_path(self):
         return self.song_folder.acc_path
 
     """Attributes in self.song_resampled"""
+
     @property
     def stretched_wav_path(self):
         return self.song_stretched.stretched_wav_path
@@ -282,8 +301,9 @@ class TrainDataSample(AudioMidiSampleTemplate):
     - Stage-2b (fine-tuning, prev-2bar): corrupt ignored, autoregressive=True
     """
 
-    def __init__(self, song_id, audio_pre_step=1000, corrupt=False,
-                 autoregressive=False):
+    def __init__(
+        self, song_id, audio_pre_step=1000, corrupt=False, autoregressive=False
+    ):
         """
         :param song_id: str or int in range(1, 910).
         :param audio_pre_step: how many extra frames to retrieve before the
@@ -298,24 +318,24 @@ class TrainDataSample(AudioMidiSampleTemplate):
         self.autoregressive = autoregressive
         self.audio_pre_step = audio_pre_step
 
-        self._nmat_dict = \
-            dict(zip(self.filtered_db_pos, [None] * self.__len__()))
+        self._nmat_dict = dict(zip(self.filtered_db_pos, [None] * self.__len__()))
 
-        self._pianotree_dict = \
-            dict(zip(self.filtered_db_pos, [None] * self.__len__()))
+        self._pianotree_dict = dict(zip(self.filtered_db_pos, [None] * self.__len__()))
 
-        self._pr_mat_dict = \
-            dict(zip(self.filtered_db_pos, [None] * self.__len__()))
+        self._pr_mat_dict = dict(zip(self.filtered_db_pos, [None] * self.__len__()))
 
-        self._feat_dict = \
-            dict(zip(self.filtered_db_pos, [None] * self.__len__()))
-
+        self._feat_dict = dict(zip(self.filtered_db_pos, [None] * self.__len__()))
 
     def load(self, *params):
         # useless info is not loaded to save memory (e.g., melody).
-        self.song_npz.load(bridge=True, piano=True, chord_lookup=True,
-                           beat_secs=True,
-                           filtered_db_pos=True, start_table=True)
+        self.song_npz.load(
+            bridge=True,
+            piano=True,
+            chord_lookup=True,
+            beat_secs=True,
+            filtered_db_pos=True,
+            start_table=True,
+        )
         self.song_stretched.load()
 
     @property
@@ -369,8 +389,7 @@ class TrainDataSample(AudioMidiSampleTemplate):
             return
 
         brg_rhy = nmat_to_rhy_array(self._nmat_dict[db][0])
-        bass_prob, pno_intensity = \
-            compute_pr_mat_feat(self._pr_mat_dict[db][1])
+        bass_prob, pno_intensity = compute_pr_mat_feat(self._pr_mat_dict[db][1])
         self._feat_dict[db] = np.stack([bass_prob, pno_intensity, brg_rhy], -1)
 
     def store_pno_tree(self, db):
@@ -393,12 +412,15 @@ class TrainDataSample(AudioMidiSampleTemplate):
 
         # prepending pre steps to the audio segment.
         if s_frame >= self.audio_pre_step:
-            return self.stretched_wav[s_frame - self.audio_pre_step: e_frame]
+            return self.stretched_wav[s_frame - self.audio_pre_step : e_frame]
         else:
             pad_lgth = self.audio_pre_step - s_frame
-            zero_pads = torch.zeros(pad_lgth, dtype=self.stretched_wav.dtype,
-                                    device=self.stretched_wav.device)
-            return torch.cat([zero_pads, self.stretched_wav[0: e_frame]], -1)
+            zero_pads = torch.zeros(
+                pad_lgth,
+                dtype=self.stretched_wav.dtype,
+                device=self.stretched_wav.device,
+            )
+            return torch.cat([zero_pads, self.stretched_wav[0:e_frame]], -1)
 
     def _store(self, db):
         self.store_brg_pno_mat(db)
@@ -406,12 +428,11 @@ class TrainDataSample(AudioMidiSampleTemplate):
         self.store_features(db)
         self.store_pno_tree(db)
 
-
     def _get_item_by_db(self, db):
         self._store(db)
 
         # chord
-        seg_chd = self.chord_lookup[db: db + SEG_LGTH]
+        seg_chd = self.chord_lookup[db : db + SEG_LGTH]
 
         # wave
         seg_wav = self.get_seg_wave(db)

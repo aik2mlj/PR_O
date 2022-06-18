@@ -4,15 +4,15 @@ import random
 
 
 class ChordDecoder(nn.Module):
-
-    def __init__(self, input_dim=36, z_input_dim=256,
-                 hidden_dim=512, z_dim=256, n_step=8):
+    def __init__(
+        self, input_dim=36, z_input_dim=256, hidden_dim=512, z_dim=256, n_step=8
+    ):
         super(ChordDecoder, self).__init__()
         self.z2dec_hid = nn.Linear(z_dim, hidden_dim)
         self.z2dec_in = nn.Linear(z_dim, z_input_dim)
-        self.gru = nn.GRU(input_dim + z_input_dim, hidden_dim,
-                          batch_first=True,
-                          bidirectional=False)
+        self.gru = nn.GRU(
+            input_dim + z_input_dim, hidden_dim, batch_first=True, bidirectional=False
+        )
         self.init_input = nn.Parameter(torch.rand(36))
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -29,15 +29,14 @@ class ChordDecoder(nn.Module):
         z_chd_hid = self.z2dec_hid(z_chd).unsqueeze(0)
         z_chd_in = self.z2dec_in(z_chd).unsqueeze(1)
         if inference:
-            tfr = 0.
+            tfr = 0.0
         token = self.init_input.repeat(bs, 1).unsqueeze(1)
         recon_root = []
         recon_chroma = []
         recon_bass = []
 
         for t in range(self.n_step):
-            chd_t, z_chd_hid = \
-                self.gru(torch.cat([token, z_chd_in], dim=-1), z_chd_hid)
+            chd_t, z_chd_hid = self.gru(torch.cat([token, z_chd_in], dim=-1), z_chd_hid)
 
             # compute output distribution
             r_root = self.root_out(chd_t)  # (bs, 1, 12)
@@ -57,10 +56,10 @@ class ChordDecoder(nn.Module):
                 token = gt_chd[:, t].unsqueeze(1)
             else:
                 t_root = torch.zeros(bs, 1, 12).to(z_chd.device).float()
-                t_root[torch.arange(0, bs), 0, r_root.max(-1)[-1]] = 1.
+                t_root[torch.arange(0, bs), 0, r_root.max(-1)[-1]] = 1.0
                 t_chroma = r_chroma.max(-1)[-1].float()
                 t_bass = torch.zeros(bs, 1, 12).to(z_chd.device).float()
-                t_bass[torch.arange(0, bs), 0, r_bass.max(-1)[-1]] = 1.
+                t_bass[torch.arange(0, bs), 0, r_bass.max(-1)[-1]] = 1.0
                 token = torch.cat([t_root, t_chroma, t_bass], dim=-1)
 
         recon_root = torch.cat(recon_root, dim=1)
@@ -70,8 +69,8 @@ class ChordDecoder(nn.Module):
 
     def recon_loss(self, c, recon_root, recon_chroma, recon_bass):
         loss_fun = self.loss_func
-        root = c[:, :, 0: 12].max(-1)[-1].view(-1).contiguous()
-        chroma = c[:, :, 12: 24].long().view(-1).contiguous()
+        root = c[:, :, 0:12].max(-1)[-1].view(-1).contiguous()
+        chroma = c[:, :, 12:24].long().view(-1).contiguous()
         bass = c[:, :, 24:].max(-1)[-1].view(-1).contiguous()
 
         recon_root = recon_root.view(-1, 12).contiguous()

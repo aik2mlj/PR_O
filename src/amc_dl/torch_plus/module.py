@@ -6,13 +6,11 @@ from .train_utils import epoch_time
 
 
 class PytorchModel(nn.Module):
-
     def __init__(self, name, device):
         self.name = name
         super(PytorchModel, self).__init__()
         if device is None:
-            device = torch.device('cuda' if torch.cuda.is_available()
-                                  else 'cpu')
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.device = device
 
     def run(self, *input):
@@ -36,9 +34,9 @@ class PytorchModel(nn.Module):
     def forward(self, mode, *input, **kwargs):
         if mode in ["run", 0]:
             return self.run(*input, **kwargs)
-        elif mode in ['loss', 'train', 1]:
+        elif mode in ["loss", "train", 1]:
             return self.loss(*input, **kwargs)
-        elif mode in ['inference', 'eval', 'val', 2]:
+        elif mode in ["inference", "eval", "val", 2]:
             return self.inference(*input, **kwargs)
         else:
             raise NotImplementedError
@@ -48,7 +46,7 @@ class PytorchModel(nn.Module):
             map_location = self.device
         dic = torch.load(model_path, map_location=map_location)
         for name in list(dic.keys()):
-            dic[name.replace('module.', '')] = dic.pop(name)
+            dic[name.replace("module.", "")] = dic.pop(name)
         self.load_state_dict(dic)
         self.to(self.device)
 
@@ -58,10 +56,19 @@ class PytorchModel(nn.Module):
 
 
 class TrainingInterface:
-
-    def __init__(self, device, model, parallel, log_path_mng, data_loaders,
-                 summary_writers,
-                 opt_scheduler, param_scheduler, n_epoch, **kwargs):
+    def __init__(
+        self,
+        device,
+        model,
+        parallel,
+        log_path_mng,
+        data_loaders,
+        summary_writers,
+        opt_scheduler,
+        param_scheduler,
+        n_epoch,
+        **kwargs,
+    ):
         self.model = model
         self.model.device = device
         if parallel:
@@ -107,7 +114,7 @@ class TrainingInterface:
     def _init_loss_dic(self):
         loss_dic = {}
         for key in self.writer_names:
-            loss_dic[key] = 0.
+            loss_dic[key] = 0.0
         return loss_dic
 
     def _accumulate_loss_dic(self, loss_dic, loss_items):
@@ -135,17 +142,17 @@ class TrainingInterface:
             inputs = self._batch_to_inputs(batch)
             self.opt_scheduler.optimizer_zero_grad()
             input_params = self.param_scheduler.step()
-            outputs = self.model('train', *inputs, **input_params)
+            outputs = self.model("train", *inputs, **input_params)
             outputs = self._sum_parallel_loss(outputs)
             loss = outputs[0]
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(),
-                                           self.opt_scheduler.clip)
+            torch.nn.utils.clip_grad_norm_(
+                self.model.parameters(), self.opt_scheduler.clip
+            )
             self.opt_scheduler.step()
             self._accumulate_loss_dic(epoch_loss_dic, outputs)
             batch_loss_dic = self._write_loss_to_dic(outputs)
-            self.summary_writers.write_task('train', batch_loss_dic,
-                                            self.train_step)
+            self.summary_writers.write_task("train", batch_loss_dic, self.train_step)
             self.train_step += 1
         return epoch_loss_dic
 
@@ -167,12 +174,11 @@ class TrainingInterface:
             inputs = self._batch_to_inputs(batch)
             input_params = self.param_scheduler.step()
             with torch.no_grad():
-                outputs = self.model('train', *inputs, **input_params)
+                outputs = self.model("train", *inputs, **input_params)
                 outputs = self._sum_parallel_loss(outputs)
             self._accumulate_loss_dic(epoch_loss_dic, outputs)
             batch_loss_dic = self._write_loss_to_dic(outputs)
-            self.summary_writers.write_task('val', batch_loss_dic,
-                                            self.val_step)
+            self.summary_writers.write_task("val", batch_loss_dic, self.val_step)
             self.val_step += 1
         return epoch_loss_dic
 
@@ -184,26 +190,23 @@ class TrainingInterface:
 
     def epoch_report(self, start_time, end_time, train_loss, valid_loss):
         epoch_mins, epoch_secs = epoch_time(start_time, end_time)
-        print(f'Epoch: {self.epoch + 1:02} | '
-              f'Time: {epoch_mins}m {epoch_secs}s',
-              flush=True)
         print(
-            f'\tTrain Loss: {train_loss:.3f}', flush=True)
-        print(
-            f'\t Valid. Loss: {valid_loss:.3f}', flush=True)
+            f"Epoch: {self.epoch + 1:02} | " f"Time: {epoch_mins}m {epoch_secs}s",
+            flush=True,
+        )
+        print(f"\tTrain Loss: {train_loss:.3f}", flush=True)
+        print(f"\t Valid. Loss: {valid_loss:.3f}", flush=True)
 
     def run(self, start_epoch=0, start_train_step=0, start_val_step=0):
         self.epoch = start_epoch
         self.train_step = start_train_step
         self.val_step = start_val_step
-        best_valid_loss = float('inf')
+        best_valid_loss = float("inf")
 
         for i in range(self.n_epoch):
             start_time = time.time()
-            train_loss = self.train()['loss'] / \
-                         len(self.data_loaders.train_loader)
-            val_loss = self.eval()['loss'] / \
-                       len(self.data_loaders.val_loader)
+            train_loss = self.train()["loss"] / len(self.data_loaders.train_loader)
+            val_loss = self.eval()["loss"] / len(self.data_loaders.val_loader)
             end_time = time.time()
             self.save_model(self.path_mng.epoch_model_path(self.name))
             if val_loss < best_valid_loss:
@@ -212,8 +215,4 @@ class TrainingInterface:
             self.epoch_report(start_time, end_time, train_loss, val_loss)
             self.epoch += 1
         self.save_model(self.path_mng.final_model_path(self.name))
-        print('Model saved.')
-
-
-
-
+        print("Model saved.")
