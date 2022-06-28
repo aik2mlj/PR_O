@@ -1,21 +1,13 @@
 # pyright: reportOptionalSubscript=false
 
-import torch
 from torchaudio.transforms import MelScale
 from torch.utils.data import Dataset, DataLoader
 from .utils import (
-    pianotree_pitch_shift,
-    chd_pitch_shift,
-    chd_to_onehot,
-    pr_mat_pitch_shift,
     nmat_to_pianotree_repr,
     nmat_to_pr_mat_repr,
     nmat_to_rhy_array,
     compute_pr_mat_feat,
 )
-from .amc_dl.torch_plus import DataLoaders
-from .audio_sp_modules.my_collate import default_collate
-from .audio_sp_modules.pitch_shift import pitch_shift_to_spec
 from .constants import *
 from .utils import read_split_dict
 
