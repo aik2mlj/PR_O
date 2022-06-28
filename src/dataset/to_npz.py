@@ -1,4 +1,5 @@
 import muspy
+import pretty_midi as pm
 import os
 import numpy as np
 import mir_eval
@@ -28,8 +29,8 @@ def get_note_matrix(fpath, fpath_test):
         for note in inst.notes:
             # start_beat = int(note.start / one_beat)
             # start_bin = int((note.start - start_beat * one_beat) / (one_beat / bin))
-            start_beat = int(note.time / bin)
-            start_bin = note.time - start_beat * bin
+            onset_beat = int(note.time / bin)
+            onset_bin = note.time - onset_beat * bin
             # end_beat = int(note.end / one_beat)
             # end_bin = int((note.end - end_beat * one_beat) / (one_beat / bin))
             # duration = int((note.end - note.start) / (one_beat / bin))
@@ -37,8 +38,8 @@ def get_note_matrix(fpath, fpath_test):
             if duration > 0:
                 notes.append(
                     [
-                        start_beat,
-                        start_bin,
+                        onset_beat,
+                        onset_bin,
                         duration,
                         note.pitch,
                         note.velocity,
@@ -66,8 +67,44 @@ def get_chord_matrix(fpath):
         beat_num = int((end - start) / one_beat)
         for _ in range(beat_num):
             beat_cnt += 1
-            chords.append(mir_eval.chord.encode(chord))
+            # see https://craffel.github.io/mir_eval/#mir_eval.chord.encode
+            chd_enc = mir_eval.chord.encode(chord)
+
+            root = chd_enc[0]
+            # make chroma and bass absolute
+            chroma_bitmap = chd_enc[1]
+            chroma_bitmap = np.roll(chroma_bitmap, root)
+            bass = (chd_enc[2] + root) % 12
+
+            line = [root]
+            for _ in chroma_bitmap:
+                line.append(_)
+            line.append(bass)
+
+            chords.append(line)
     return chords
+
+
+def get_start_table(notes):
+    """
+    i-th row indicates the starting row of the "notes" array at i-th beat.
+    """
+    total_beat = notes[-1][0]
+    row_cnt = 0
+    start_table = []
+    for beat in range(total_beat):
+        while notes[row_cnt][0] < beat:
+            row_cnt += 1
+        start_table.append(row_cnt)
+    return start_table
+
+
+def get_downbeat_position(fpath):
+    """
+    simply get the downbeat position of the given midi file
+    """
+    music = pm.PrettyMIDI(fpath)
+    return [int(b / one_beat) for b in music.get_downbeats()]
 
 
 if __name__ == "__main__":
@@ -88,4 +125,14 @@ if __name__ == "__main__":
             fpath_chd = join(dpath_chd, piece, ver[:-4]) + ".out"
             chord_mat = get_chord_matrix(fpath_chd)
 
-            np.savez(join(dpath_save, piece, ver[:-4]), note=note_mat, chord=chord_mat)
+            start_table = get_start_table(note_mat)
+
+            db_pos = get_downbeat_position(fpath)
+
+            np.savez(
+                join(dpath_save, piece, ver[:-4]),
+                notes=note_mat,
+                chord=chord_mat,
+                start_table=start_table,
+                db_pos=db_pos,
+            )
