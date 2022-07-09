@@ -3,6 +3,7 @@ import os
 import torch
 from torch import nn
 from .train_utils import epoch_time
+from tqdm import tqdm
 
 
 class PytorchModel(nn.Module):
@@ -138,7 +139,7 @@ class TrainingInterface:
         self.param_scheduler.train()
         epoch_loss_dic = self._init_loss_dic()
 
-        for i, batch in enumerate(self.data_loaders.train_loader):
+        for i, batch in enumerate(tqdm(self.data_loaders.train_loader)):
             inputs = self._batch_to_inputs(batch)
             self.opt_scheduler.optimizer_zero_grad()
             input_params = self.param_scheduler.step()
@@ -191,7 +192,8 @@ class TrainingInterface:
     def epoch_report(self, start_time, end_time, train_loss, valid_loss):
         epoch_mins, epoch_secs = epoch_time(start_time, end_time)
         print(
-            f"Epoch: {self.epoch + 1:02} | " f"Time: {epoch_mins}m {epoch_secs}s",
+            f"Epoch: {self.epoch + 1:02} | "
+            f"Time: {epoch_mins}m {epoch_secs}s",
             flush=True,
         )
         print(f"\tTrain Loss: {train_loss:.3f}", flush=True)
@@ -203,7 +205,7 @@ class TrainingInterface:
         self.val_step = start_val_step
         best_valid_loss = float("inf")
 
-        for i in range(self.n_epoch):
+        for i in tqdm(range(self.n_epoch)):
             start_time = time.time()
             train_loss = self.train()["loss"] / len(self.data_loaders.train_loader)
             val_loss = self.eval()["loss"] / len(self.data_loaders.val_loader)
