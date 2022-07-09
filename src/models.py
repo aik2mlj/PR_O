@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.distributions import Normal
 import numpy as np
-from .dl_modules import (
+from dl_modules import (
     ChordEncoder, ChordDecoder, PianoTreeDecoder, TextureEncoder, FeatDecoder, NaiveNN
 )
 
@@ -22,7 +22,7 @@ class PianoReductionVAE(PytorchModel):
 
     def __init__(
         self, name, device, chord_enc: ChordEncoder, chord_dec: ChordDecoder,
-        prmat_enc: TextureEncoder, diffusion_nn, feat_dec: FeatDecoder,
+        prmat_enc: TextureEncoder, diffusion_nn: NaiveNN, feat_dec: FeatDecoder,
         pianotree_dec: PianoTreeDecoder
     ):
 
@@ -48,21 +48,23 @@ class PianoReductionVAE(PytorchModel):
     def z_sym_dim(self):
         return self.prmat_enc.z_dim
 
-    def run(self, pno_tree, chd, pr_mat, feat, tfr1, tfr2, tfr3):
+    def run(self, pno_tree_y, chd, pr_mat, feat_y, tfr1, tfr2, tfr3):
         """
         Forward path of the model in training (w/o computing loss).
         """
 
         # chord representation
-        dist_chd = self.chord_dec(chd)
+        dist_chd = self.chord_enc(chd)
         z_chd = dist_chd.rsample()
 
         # symbolic-texture representation
         dist_x_sym = self.prmat_enc(pr_mat)
-        z_x_sym = dist_x_sym.rsample()
+        # z_x_sym = dist_x_sym.rsample()
+        # print(dist_x_sym)
 
         # diffusion model: transform z_x_txt to z_y_txt
-        dist_sym = self.diffusion_nn(z_x_sym)
+        dist_sym = self.diffusion_nn(dist_x_sym)
+        # print(dist_sym)
         z_sym = dist_sym.rsample()  # this is z_y_txt
 
         # z
@@ -72,13 +74,13 @@ class PianoReductionVAE(PytorchModel):
         recon_root, recon_chroma, recon_bass = self.chord_dec(z_chd, False, tfr3, chd)
 
         # reconstruction of symbolic feature from z_y_txt
-        recon_feat = self.feat_dec(z_sym, False, tfr1, feat)
+        recon_feat = self.feat_dec(z_sym, False, tfr1, feat_y)
 
         # embed the reconstructed feature (without applying argmax)
         feat_emb = self.feat_emb_layer(recon_feat)
 
         # prepare the teacher-forcing data for pianotree decoder
-        embedded_pno_tree, pno_tree_lgths = self.pianotree_dec.emb_x(pno_tree)
+        embedded_pno_tree, pno_tree_lgths = self.pianotree_dec.emb_x(pno_tree_y)
 
         # pianotree decoder
         recon_pitch, recon_dur = self.pianotree_dec(
@@ -91,13 +93,13 @@ class PianoReductionVAE(PytorchModel):
         )
 
     def loss_function(
-        self, pno_tree, feat, chd, recon_pitch, recon_dur, recon_root, recon_chroma,
+        self, pno_tree_y, feat_y, chd, recon_pitch, recon_dur, recon_root, recon_chroma,
         recon_bass, recon_feat, dist_chd, dist_sym, beta, weights
     ):
         """Compute the loss from ground truth and the output of self.run()"""
         # pianotree recon loss
         pno_tree_l, pitch_l, dur_l = self.pianotree_dec.recon_loss(
-            pno_tree, recon_pitch, recon_dur, weights, False
+            pno_tree_y, recon_pitch, recon_dur, weights, False
         )
 
         # chord recon loss
@@ -107,7 +109,7 @@ class PianoReductionVAE(PytorchModel):
 
         # feature prediction loss
         feat_l, bass_feat_l, int_feat_l, rhy_feat_l = self.feat_dec.recon_loss(
-            feat, recon_feat
+            feat_y, recon_feat
         )
 
         # kl losses
@@ -121,15 +123,15 @@ class PianoReductionVAE(PytorchModel):
 
         return (
             loss, pno_tree_l, pitch_l, dur_l, kl_l, kl_chd, kl_sym, chord_l, root_l,
-            chroma_l, bass_l, feat_l, bass_feat_l, int_feat_l, rhy_feat_l
+            chroma_l, bass_l, feat_l, bass_feat_l, int_feat_l, rhy_feat_l, beta
         )
 
     def loss(
         self,
-        pno_tree,
+        pno_tree_y,
         chd,
         pr_mat,
-        feat,
+        feat_y,
         tfr1,
         tfr2,
         tfr3,
@@ -154,10 +156,10 @@ class PianoReductionVAE(PytorchModel):
         (
             recon_pitch, recon_dur, recon_root, recon_chroma, recon_bass, recon_feat,
             dist_chd, dist_sym
-        ) = self.run(pno_tree, chd, pr_mat, feat, tfr1, tfr2, tfr3)
+        ) = self.run(pno_tree_y, chd, pr_mat, feat_y, tfr1, tfr2, tfr3)
 
         return self.loss_function(
-            pno_tree, feat, chd, recon_pitch, recon_dur, recon_root, recon_chroma,
+            pno_tree_y, feat_y, chd, recon_pitch, recon_dur, recon_root, recon_chroma,
             recon_bass, recon_feat, dist_chd, dist_sym, beta, weights
         )
 
@@ -202,8 +204,8 @@ class PianoReductionVAE(PytorchModel):
             z_chd = self.chord_enc(chord).mean
 
             dist_x_sym = self.prmat_enc(pr_mat)
-            z_x_sym = dist_x_sym.mean  # FIXME: is this correct?
-            dist_sym = self.diffusion_nn(z_x_sym)
+            # z_x_sym = dist_x_sym.mean  # FIXME: is this correct?
+            dist_sym = self.diffusion_nn(dist_x_sym)
             z_sym = dist_sym.mean  # this is z_y_txt
 
             z = torch.cat([z_chd, z_sym], -1)

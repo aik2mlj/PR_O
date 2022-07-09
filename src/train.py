@@ -1,5 +1,5 @@
-from .dirs import *
-from .amc_dl.torch_plus import (
+from dirs import *
+from amc_dl.torch_plus import (
     LogPathManager,
     SummaryWriters,
     ParameterScheduler,
@@ -8,11 +8,11 @@ from .amc_dl.torch_plus import (
     TeacherForcingScheduler,
     ConstantScheduler,
 )
-from .amc_dl.torch_plus.module import TrainingInterface
+from amc_dl.torch_plus.module import TrainingInterface
 import torch
 from torch import optim
 import os
-from .utils import beta_annealing, scheduled_sampling
+from utils import beta_annealing, scheduled_sampling
 
 
 class TrainingVAE(TrainingInterface):
@@ -23,7 +23,6 @@ class TrainingVAE(TrainingInterface):
 def train_model(
     model,
     data_loaders,
-    stage,
     readme_fn,
     n_epoch,
     parallel,
@@ -35,7 +34,7 @@ def train_model(
     result_path=None,
 ):
     """
-    :param model: A2S model. Possibly loaded with pre-trained parameters.
+    :param model: PianoReductionVAE model. Possibly loaded with pre-trained parameters.
     :param data_loaders: dataset.AudioMidiDataLoaders
     :param stage: training stage in range(0, 4).
     :param readme_fn: the fn to copy as log.
@@ -49,7 +48,6 @@ def train_model(
     :param result_path: the output log path.
     :return: None
     """
-
     def pre_load_dataset(dst):
         for item in range(len(dst)):
             _ = dst[item]
@@ -65,8 +63,7 @@ def train_model(
 
     parallel = (
         parallel
-        if torch.cuda.is_available() and torch.cuda.device_count() > 1
-        else False
+        if torch.cuda.is_available() and torch.cuda.device_count() > 1 else False
     )
 
     if load_data_at_start:
@@ -92,10 +89,7 @@ def train_model(
     tfr3_scheduler = TeacherForcingScheduler(*tf_rates[2], f=scheduled_sampling)
     weights_scheduler = ConstantScheduler(weights)
 
-    if stage >= 1:
-        beta_scheduler = TeacherForcingScheduler(beta, 0.01, f=beta_annealing)
-    else:
-        beta_scheduler = TeacherForcingScheduler(beta, 0.0, f=beta_annealing)
+    beta_scheduler = TeacherForcingScheduler(beta, 0.0, f=beta_annealing)
 
     params_dic = dict(
         tfr1=tfr1_scheduler,

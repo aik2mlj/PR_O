@@ -1,15 +1,15 @@
 import torch
 from torch.utils.data import DataLoader
-from .dataset import PianoOrchDataset
-from .utils import (
+from dataset import PianoOrchDataset
+from utils import (
     pianotree_pitch_shift,
     chd_pitch_shift,
     chd_to_onehot,
     pr_mat_pitch_shift,
 )
-from .amc_dl.torch_plus import DataLoaders
-from .audio_sp_modules.my_collate import default_collate
-from .constants import *
+from amc_dl.torch_plus import DataLoaders
+from audio_sp_modules.my_collate import default_collate
+from constants import *
 
 
 def collate_fn(batch, device, augment_p):
@@ -21,7 +21,6 @@ def collate_fn(batch, device, augment_p):
     1) pitch-shift augment the symbolic data
     2) batching and converting data device and to cuda possibly.
     """
-
     def sample_with_p():
         return np.random.choice(np.arange(-6, 6), 1, p=augment_p)[0]
 
@@ -42,6 +41,8 @@ def collate_fn(batch, device, augment_p):
 
     # collate: default pytorch collate function
     pno_tree, chd, pr_mat, feat = default_collate(batch)
+    # after collate size: (B: batch size)
+    # (B, 32, 16, 6) (B, 8, 36) (B, 32, 128) (B, 32, 3)
 
     # after collate: to datatype, device, and pitch shift the audio.
     pno_tree = pno_tree.long().to(device)
@@ -53,9 +54,7 @@ def collate_fn(batch, device, augment_p):
 
 
 class PianoOrchDataLoader(DataLoaders):
-
     """Dataloaders containing train and valid dataloaders."""
-
     def batch_to_inputs(self, batch):
         return batch
 
@@ -108,9 +107,7 @@ def create_data_loaders(
 ):
     """Fast data loaders initialization."""
 
-    train_dataset, valid_dataset = PianoOrchDataset.load_train_and_valid_sets(
-        use_chord=True
-    )
+    train_dataset, valid_dataset = PianoOrchDataset.load_train_and_valid_sets(**kwargs)
 
     aug_p = AUG_P / AUG_P.sum()
 

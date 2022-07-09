@@ -1,9 +1,8 @@
-from .dirs import *
+from dirs import *
 import numpy as np
 import pickle
 import os
-
-
+import pretty_midi as pm
 """Project utils"""
 
 
@@ -56,10 +55,13 @@ def nmat_to_pianotree_repr(
         # e.g., d = 4 -> bin_str = '00011'
         d = min(d, 32)
         bin_str = np.binary_repr(int(d) - 1, width=5)
-        pno_tree[o, cur_idx[o], 1:] = np.fromstring(
-            " ".join(list(bin_str)), dtype=np.int64, sep=" "
-        )
-        cur_idx[o] += 1
+        pno_tree[o, cur_idx[o],
+                 1:] = np.fromstring(" ".join(list(bin_str)), dtype=np.int64, sep=" ")
+
+        # FIXME: when more than `max_note_count` notes are played in one step
+        if cur_idx[o] < max_note_count - 1:
+            cur_idx[o] += 1
+
     pno_tree[np.arange(0, n_step), cur_idx, 0] = pitch_eos_ind
     return pno_tree
 
@@ -167,3 +169,38 @@ def scheduled_sampling(i, high=0.7, low=0.05):
     z = 1 / (1 + np.exp(x))
     y = (high - low) * z + low
     return y
+
+
+def estx_to_midi_file(est_x, fpath):
+    print(f"est_x with shape {est_x.shape} to midi file {fpath}")  # (#, 32, 15, 6)
+    # pr_mat3d is a (32, max_note_count, 6) matrix. In the last dim,
+    # the 0th column is for pitch, 1: 6 is for duration in binary repr. Output is
+    # padded with <sos> and <eos> tokens in the pitch column, but with pad token
+    # for dur columns.
+    midi = pm.PrettyMIDI()
+    piano_program = pm.instrument_name_to_program("Acoustic Grand Piano")
+    piano = pm.Instrument(program=piano_program)
+    t = 0
+    for two_bar_ind, two_bars in enumerate(est_x):
+        for step_ind, step in enumerate(two_bars):
+            for kth_key in step:
+                assert len(kth_key) == 6
+                if not (kth_key[0] >= 0 and kth_key[0] <= 127):
+                    # print(f"({two_bar_ind}, {step_ind}, somekey, 0): {kth_key[0]}")
+                    continue
+
+                # print(f"({two_bar_ind}, {step_ind}, somekey, 0): {kth_key[0]}")
+                dur = (
+                    kth_key[5] + (kth_key[4] << 1) + (kth_key[3] << 2) +
+                    (kth_key[2] << 3) + (kth_key[1] << 4) + 1
+                )
+                note = pm.Note(
+                    velocity=100,
+                    pitch=int(kth_key[0]),
+                    start=t,
+                    end=t + int(dur) * 1 / 8,
+                )
+                piano.notes.append(note)
+            t += 1 / 8
+    midi.instruments.append(piano)
+    midi.write(fpath)

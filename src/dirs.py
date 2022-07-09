@@ -1,9 +1,7 @@
 import os
 
 # dataset paths
-COMBINED_DATA_DIR = "data/audio-midi-combined"
-QUANTIZED_DATA_DIR = "data/quantized_pop909_4_bin"
-STRETCHED_AUDIO_NPY_PATH = "data/audio_stretched"
+QUANTIZED_DATA_DIR = "data/LOP_4_bin"
 TRAIN_SPLIT_DIR = "data/train_split"
 
 # the path to store demo.
