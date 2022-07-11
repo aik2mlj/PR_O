@@ -11,12 +11,15 @@ import torch
 import pretty_midi as pm
 from datetime import datetime
 
+model_name = "prvae_pttxtenc"
+# model_path = "result/prvae_pttxtenc/result_2022-07-11_162707"
+
 
 def model_compute(model, fname, device):
     """Batching the input and call model.inference()."""
 
     song = DataSampleNpz(fname, load_chord=True)
-    _, chd_x, prmat_x, _ = song.get_whole_song_data()
+    _, chd_x, prmat_x, _, _ = song.get_whole_song_data()
     print(chd_x.shape, prmat_x.shape)
 
     predictions = model.inference(chd_x.to(device), prmat_x.to(device))
@@ -43,6 +46,6 @@ if __name__ == "__main__":
     else:
         output_fpath = f"exp/inference_[{test}]_{datetime.now().strftime('%m-%d_%H:%M:%S')}.mid"
 
-    model = prepare_model("prvae", model_path=model_path)
+    model = prepare_model(model_name, model_path=model_path)
     predictions = model_compute(model, test, device)
     estx_to_midi_file(predictions, output_fpath)

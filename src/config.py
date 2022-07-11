@@ -9,14 +9,16 @@ from constants import AUG_P
 from dirs import RESULT_PATH
 from train import train_model
 
-PR_CONFIG = {'z_chd_dim': 256, 'z_sym_dim': 256}
+PR_CONFIG = {
+    'z_chd_dim': 256,
+    'z_sym_dim': 256,
+    'pt_polydis_path': 'data/Polydis_pretrained/model_master_final.pt'
+}
 PR_PTTXTENC_CONFIG = {
     'z_chd_dim': 256,
     'z_sym_dim': 256,
-    'pretrained_path': 'data/Polydis_pretrained/model_master_final.pt'
+    'pt_polydis_path': 'data/Polydis_pretrained/model_master_final.pt'
 }
-
-NOCHD_CONFIG = {'z_aud_dim': 320, 'z_sym_dim': 192}
 
 SUPERVISED_CONFIG = {'z_dim': 512}
 
@@ -45,13 +47,14 @@ def prepare_model(model_id, model_path=None):
         model = PianoReductionVAE.init_model(
             z_chd_dim=PR_CONFIG['z_chd_dim'],
             z_sym_dim=PR_CONFIG['z_sym_dim'],
+            # pt_txtenc_path=PR_PTTXTENC_CONFIG['pt_polydis_path'],
             model_path=model_path
         )
     elif model_id == "prvae_pttxtenc":
         model = PianoReductionVAE.init_model_pretrained_txtenc(
             z_chd_dim=PR_PTTXTENC_CONFIG['z_chd_dim'],
             z_sym_dim=PR_PTTXTENC_CONFIG['z_sym_dim'],
-            pretrained_path=PR_PTTXTENC_CONFIG['pretrained_path'],
+            pt_txtenc_path=PR_PTTXTENC_CONFIG['pt_polydis_path'],
             model_path=model_path
         )
     else:

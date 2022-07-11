@@ -3,7 +3,24 @@ import numpy as np
 import pickle
 import os
 import pretty_midi as pm
+import torch
+from dl_modules import TextureEncoder
 """Project utils"""
+
+
+def load_pretrained_txt_enc(fpath, z_dim, device):
+    prmat_enc = TextureEncoder(z_dim=z_dim)
+    checkpoint = torch.load(fpath)
+    from collections import OrderedDict
+    rhy_checkpoint = OrderedDict()
+    for k, v in checkpoint.items():
+        part = k.split('.')[0]
+        name = '.'.join(k.split('.')[1 :])
+        if part == 'rhy_encoder':
+            rhy_checkpoint[name] = v
+    prmat_enc.load_state_dict(rhy_checkpoint)
+    prmat_enc.to(device)
+    return prmat_enc
 
 
 def read_split_dict(meter, n_subdiv):

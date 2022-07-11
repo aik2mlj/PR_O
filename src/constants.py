@@ -24,4 +24,5 @@ MAX_KEPT_RATIO = 0.7
 MIN_KEPT_RATIO = 0.25
 MAX_ABS_PITCH_SHIFT = 2
 
-AUG_P = np.array([2, 2, 5, 5, 3, 7, 7, 5, 7, 3, 5, 1])
+# AUG_P = np.array([2, 2, 5, 5, 3, 7, 7, 5, 7, 3, 5, 1])
+AUG_P = np.ones(12)

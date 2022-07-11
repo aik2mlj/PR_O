@@ -216,7 +216,6 @@ class DataSampleNpz:
 
         self._store_seg(db)
 
-        # TODO: also return prmat_y for contrastive loss
         # chord
         seg_chd_x = self.chord_x[db : db + SEG_LGTH]
         # prmat
@@ -225,8 +224,10 @@ class DataSampleNpz:
         seg_pno_tree_y = self._pianotree_dict_y[db]
         # symbolic feature
         seg_feat_y = self._feat_dict_y[db]
+        # prmat y for contrastive loss
+        seg_prmat_y = self._pr_mat_dict_y[db]
 
-        return seg_pno_tree_y, seg_chd_x, seg_prmat_x, seg_feat_y
+        return seg_pno_tree_y, seg_chd_x, seg_prmat_x, seg_feat_y, seg_prmat_y
 
     def __getitem__(self, idx):
         db = self.db_pos[idx]
@@ -240,20 +241,23 @@ class DataSampleNpz:
         chd_x = []
         prmat_x = []
         feat_y = []
+        prmat_y = []
 
         for i in range(0, len(self), 2):
-            seg_pno_tree_y, seg_chd_x, seg_prmat_x, seg_feat_y = self[i]
+            seg_pno_tree_y, seg_chd_x, seg_prmat_x, seg_feat_y, seg_prmat_y = self[i]
             pno_tree_y.append(seg_pno_tree_y)
             chd_x.append(chd_to_onehot(seg_chd_x))
             prmat_x.append(seg_prmat_x)
             feat_y.append(seg_feat_y)
+            prmat_y.append(seg_prmat_y)
 
         pno_tree_y = torch.from_numpy(np.array(pno_tree_y, dtype=np.float32))
         chd_x = torch.from_numpy(np.array(chd_x, dtype=np.float32))
         prmat_x = torch.from_numpy(np.array(prmat_x, dtype=np.float32))
         feat_y = torch.from_numpy(np.array(feat_y, dtype=np.float32))
+        prmat_y = torch.from_numpy(np.array(prmat_y, dtype=np.float32))
 
-        return pno_tree_y, chd_x, prmat_x, feat_y
+        return pno_tree_y, chd_x, prmat_x, feat_y, prmat_y
 
 
 class PianoOrchDataset(Dataset):

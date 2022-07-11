@@ -25,13 +25,14 @@ def collate_fn(batch, device, augment_p):
         return np.random.choice(np.arange(-6, 6), 1, p=augment_p)[0]
 
     def sample_op(b):
-        # b: (pianotree, chord, piano-roll, symbolic feature)
-        pt, c, pm, feat = b
+        # b: (pianotree, chord, piano-roll, symbolic feature, piano-roll_y)
+        pt, c, pm, feat, pm_y = b
         pt = pianotree_pitch_shift(pt, aug_shift)
         c = chd_to_onehot(chd_pitch_shift(c, aug_shift))
         pm = None if pm is None else pr_mat_pitch_shift(pm, aug_shift)
         feat = None if feat is None else feat
-        return pt, c, pm, feat
+        pm_y = None if pm_y is None else pr_mat_pitch_shift(pm_y, aug_shift)
+        return pt, c, pm, feat, pm_y
 
     # random shift degree
     aug_shift = sample_with_p() if augment_p is not None else 0
@@ -40,7 +41,7 @@ def collate_fn(batch, device, augment_p):
     batch = [sample_op(b) for b in batch]
 
     # collate: default pytorch collate function
-    pno_tree, chd, pr_mat, feat = default_collate(batch)
+    pno_tree, chd, pr_mat, feat, prmat_y = default_collate(batch)
     # after collate size: (B: batch size)
     # (B, 32, 16, 6) (B, 8, 36) (B, 32, 128) (B, 32, 3)
 
@@ -49,8 +50,9 @@ def collate_fn(batch, device, augment_p):
     chd = chd.float().to(device)
     pr_mat = None if pr_mat is None else pr_mat.float().to(device)
     feat = None if feat is None else feat.float().to(device)
+    prmat_y = None if prmat_y is None else prmat_y.float().to(device)
 
-    return pno_tree, chd, pr_mat, feat
+    return pno_tree, chd, pr_mat, feat, prmat_y
 
 
 class PianoOrchDataLoader(DataLoaders):
