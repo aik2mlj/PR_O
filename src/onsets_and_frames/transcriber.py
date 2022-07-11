@@ -90,7 +90,8 @@ class OnsetsAndFrames(nn.Module):
         offset_pred = self.offset_stack(mel)
         activation_pred = self.frame_stack(mel)
         combined_pred = torch.cat(
-            [onset_pred.detach(), offset_pred.detach(), activation_pred], dim=-1
+            [onset_pred.detach(),
+             offset_pred.detach(), activation_pred], dim=-1
         )
         frame_pred = self.combined_stack(combined_pred)
         velocity_pred = self.velocity_stack(mel)
@@ -103,9 +104,8 @@ class OnsetsAndFrames(nn.Module):
         frame_label = batch["frame"]
         velocity_label = batch["velocity"]
 
-        mel = melspectrogram(
-            audio_label.reshape(-1, audio_label.shape[-1])[:, :-1]
-        ).transpose(-1, -2)
+        mel = melspectrogram(audio_label.reshape(-1, audio_label.shape[-1])[:, :-1]
+                            ).transpose(-1, -2)
         onset_pred, offset_pred, _, frame_pred, velocity_pred = self(mel)
 
         predictions = {
@@ -116,12 +116,16 @@ class OnsetsAndFrames(nn.Module):
         }
 
         losses = {
-            "loss/onset": F.binary_cross_entropy(predictions["onset"], onset_label),
-            "loss/offset": F.binary_cross_entropy(predictions["offset"], offset_label),
-            "loss/frame": F.binary_cross_entropy(predictions["frame"], frame_label),
-            "loss/velocity": self.velocity_loss(
-                predictions["velocity"], velocity_label, onset_label
-            ),
+            "loss/onset":
+                F.binary_cross_entropy(predictions["onset"], onset_label),
+            "loss/offset":
+                F.binary_cross_entropy(predictions["offset"], offset_label),
+            "loss/frame":
+                F.binary_cross_entropy(predictions["frame"], frame_label),
+            "loss/velocity":
+                self.velocity_loss(
+                    predictions["velocity"], velocity_label, onset_label
+                ),
         }
 
         return predictions, losses
@@ -131,6 +135,5 @@ class OnsetsAndFrames(nn.Module):
         if denominator.item() == 0:
             return denominator
         else:
-            return (
-                onset_label * (velocity_label - velocity_pred) ** 2
-            ).sum() / denominator
+            return (onset_label *
+                    (velocity_label - velocity_pred)**2).sum() / denominator

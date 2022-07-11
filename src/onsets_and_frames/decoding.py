@@ -22,7 +22,9 @@ def extract_notes(onsets, frames, velocity, onset_threshold=0.5, frame_threshold
     """
     onsets = (onsets > onset_threshold).cpu().to(torch.uint8)
     frames = (frames > frame_threshold).cpu().to(torch.uint8)
-    onset_diff = torch.cat([onsets[:1, :], onsets[1:, :] - onsets[:-1, :]], dim=0) == 1
+    onset_diff = torch.cat(
+        [onsets[: 1, :], onsets[1 :, :] - onsets[:-1, :]], dim=0
+    ) == 1
 
     pitches = []
     intervals = []
@@ -70,7 +72,7 @@ def notes_to_frames(pitches, intervals, shape):
     """
     roll = np.zeros(tuple(shape))
     for pitch, (onset, offset) in zip(pitches, intervals):
-        roll[onset:offset, pitch] = 1
+        roll[onset : offset, pitch] = 1
 
     time = np.arange(roll.shape[0])
     freqs = [roll[t, :].nonzero()[0] for t in time]

@@ -101,7 +101,7 @@ class DataSampleNpz:
 
         s_ind = self.start_table_x[db]
         e_ind = self.start_table_x[db + SEG_LGTH]
-        seg_mats = self.notes_x[s_ind:e_ind]
+        seg_mats = self.notes_x[s_ind : e_ind]
         return seg_mats.copy()
 
     def note_mat_seg_at_db_y(self, db):
@@ -112,7 +112,7 @@ class DataSampleNpz:
 
         s_ind = self.start_table_y[db]
         e_ind = self.start_table_y[db + SEG_LGTH]
-        seg_mats = self.notes_y[s_ind:e_ind]
+        seg_mats = self.notes_y[s_ind : e_ind]
         return seg_mats.copy()
 
     @staticmethod
@@ -218,7 +218,7 @@ class DataSampleNpz:
 
         # TODO: also return prmat_y for contrastive loss
         # chord
-        seg_chd_x = self.chord_x[db:db + SEG_LGTH]
+        seg_chd_x = self.chord_x[db : db + SEG_LGTH]
         # prmat
         seg_prmat_x = self._pr_mat_dict_x[db]
         # pianotree

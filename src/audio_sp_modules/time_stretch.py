@@ -1,7 +1,5 @@
 from librosa import core
 import numpy as np
-
-
 """
 Modified from the librosa implementation. 
 
@@ -31,7 +29,7 @@ def phase_vocoder(D, time_steps, hop_length=None):
 
     for (t, step) in enumerate(time_steps):
 
-        columns = D[:, int(step) : int(step + 2)]
+        columns = D[:, int(step): int(step + 2)]
 
         # Weighting for linear magnitude interpolation
         alpha = np.mod(step, 1.0)

@@ -56,7 +56,7 @@ def nmat_to_pianotree_repr(
         d = min(d, 32)
         bin_str = np.binary_repr(int(d) - 1, width=5)
         pno_tree[o, cur_idx[o],
-                 1:] = np.fromstring(" ".join(list(bin_str)), dtype=np.int64, sep=" ")
+                 1 :] = np.fromstring(" ".join(list(bin_str)), dtype=np.int64, sep=" ")
 
         # FIXME: when more than `max_note_count` notes are played in one step
         if cur_idx[o] < max_note_count - 1:
@@ -81,7 +81,7 @@ def pr_mat_pitch_shift(pr_mat, shift):
 def chd_pitch_shift(chd, shift):
     chd = chd.copy()
     chd[:, 0] = (chd[:, 0] + shift) % 12
-    chd[:, 1:13] = np.roll(chd[:, 1:13], shift, axis=-1)
+    chd[:, 1 : 13] = np.roll(chd[:, 1 : 13], shift, axis=-1)
     chd[:, -1] = (chd[:, -1] + shift) % 12
     return chd
 
@@ -90,7 +90,7 @@ def chd_to_onehot(chd):
     n_step = chd.shape[0]
     onehot_chd = np.zeros((n_step, 36), dtype=np.int64)
     onehot_chd[np.arange(n_step), chd[:, 0]] = 1
-    onehot_chd[:, 12:24] = chd[:, 1:13]
+    onehot_chd[:, 12 : 24] = chd[:, 1 : 13]
     onehot_chd[np.arange(n_step), 24 + chd[:, -1]] = 1
     return onehot_chd
 

@@ -10,7 +10,6 @@ from .constants import *
 
 class STFT(torch.nn.Module):
     """adapted from Prem Seetharaman's https://github.com/pseeth/pytorch-stft"""
-
     def __init__(self, filter_length, hop_length, win_length=None, window="hann"):
         super(STFT, self).__init__()
         if win_length is None:
@@ -25,7 +24,8 @@ class STFT(torch.nn.Module):
 
         cutoff = int((self.filter_length / 2 + 1))
         fourier_basis = np.vstack(
-            [np.real(fourier_basis[:cutoff, :]), np.imag(fourier_basis[:cutoff, :])]
+            [np.real(fourier_basis[: cutoff, :]),
+             np.imag(fourier_basis[: cutoff, :])]
         )
 
         forward_basis = torch.FloatTensor(fourier_basis[:, None, :])
@@ -63,8 +63,8 @@ class STFT(torch.nn.Module):
         )
 
         cutoff = int((self.filter_length / 2) + 1)
-        real_part = forward_transform[:, :cutoff, :]
-        imag_part = forward_transform[:, cutoff:, :]
+        real_part = forward_transform[:, : cutoff, :]
+        imag_part = forward_transform[:, cutoff :, :]
 
         magnitude = torch.sqrt(real_part**2 + imag_part**2)
         phase = torch.autograd.Variable(torch.atan2(imag_part.data, real_part.data))
@@ -113,6 +113,11 @@ class MelSpectrogram(torch.nn.Module):
 
 # the default melspectrogram converter across the project
 melspectrogram = MelSpectrogram(
-    N_MELS, SAMPLE_RATE, WINDOW_LENGTH, HOP_LENGTH, mel_fmin=MEL_FMIN, mel_fmax=MEL_FMAX
+    N_MELS,
+    SAMPLE_RATE,
+    WINDOW_LENGTH,
+    HOP_LENGTH,
+    mel_fmin=MEL_FMIN,
+    mel_fmax=MEL_FMAX
 )
 melspectrogram.to(DEFAULT_DEVICE)

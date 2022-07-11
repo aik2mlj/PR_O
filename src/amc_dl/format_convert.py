@@ -1,7 +1,6 @@
 import numpy as np
 import pretty_midi as pm
 
-
 ################################################################################
 # midi
 ################################################################################
@@ -20,7 +19,7 @@ def midi_to_mel_pianoroll(fn, bpm=120):
         p = n.pitch
         pr[int(s), int(p)] = 1
         pr[int(s) + 1 : int(e) + 1, 128] = 1
-        pr[int(s) : int(e) + 1, -1] = 0
+        pr[int(s): int(e) + 1, -1] = 0
     pr = pr.reshape((-1, 32, 130))
     return pr
 
@@ -43,8 +42,8 @@ def pad_mel_pianoroll(pianoroll, target_len, rest_ind=129):
 
 
 def augment_mel_pianoroll(pr, shift=0):
-    pitch_part = np.roll(pr[:, 0:128], shift, axis=-1)
-    control_part = pr[:, 128:]
+    pitch_part = np.roll(pr[:, 0 : 128], shift, axis=-1)
+    control_part = pr[:, 128 :]
     augmented_pr = np.concatenate([pitch_part, control_part], axis=-1)
     return augmented_pr
 
@@ -107,7 +106,7 @@ def chord_chroma_to_notes(chroma, bpm, begin=0.0, velocity=80):
         else:
             ts.append(t)
     ts.sort()
-    ets = ts[1:] + [chroma.shape[0]]
+    ets = ts[1 :] + [chroma.shape[0]]
     notes = []
     for (s, e) in zip(ts, ets):
         pitches = np.where(chroma[s] != 0)[0]
@@ -144,8 +143,8 @@ def prmat_to_notes(prmat, bpm, begin=0.0, vel=100):
 def nmat_to_notes(nmat, bpm, begin, vel=100.0):
     alpha = 0.25 * 60 / bpm
     notes = [
-        pm.Note(int(vel), int(p), alpha * s + begin, alpha * (s + d) + begin)
-        for (s, p, d) in nmat[:, 0:3]
+        pm.Note(int(vel), int(p), alpha * s + begin,
+                alpha * (s + d) + begin) for (s, p, d) in nmat[:, 0 : 3]
     ]
     return notes
 

@@ -5,7 +5,6 @@ import collections
 string_classes = (str, bytes)
 np_str_obj_array_pattern = re.compile(r"[SaUO]")
 
-
 default_collate_err_msg_format = (
     "default_collate: batch must contain tensors, numpy arrays, numbers, "
     "dicts or lists; found {}"
@@ -27,9 +26,8 @@ def default_collate(batch):
             out = elem.new(storage)
         return torch.stack(batch, 0, out=out)
     elif (
-        elem_type.__module__ == "numpy"
-        and elem_type.__name__ != "str_"
-        and elem_type.__name__ != "string_"
+        elem_type.__module__ == "numpy" and elem_type.__name__ != "str_" and
+        elem_type.__name__ != "string_"
     ):
         if elem_type.__name__ == "ndarray" or elem_type.__name__ == "memmap":
             # array of string classes and object
@@ -55,7 +53,8 @@ def default_collate(batch):
         elem_size = len(next(it))
         if not all(len(elem) == elem_size for elem in it):
             raise RuntimeError(
-                "each element in list of batch should " "be of equal size"
+                "each element in list of batch should "
+                "be of equal size"
             )
         transposed = zip(*batch)
         return [default_collate(samples) for samples in transposed]

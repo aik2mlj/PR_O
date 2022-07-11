@@ -4,12 +4,10 @@ from torch import Tensor
 from torchaudio.functional import phase_vocoder, resample
 from torchaudio.transforms import MelScale
 import math
-
 """
 This python file is a fast and approximate implementation of pitch-shift.
 The input is a wave, the output is the mel-spectrogram.
 """
-
 
 SPECIAL_SR = {
     -6: 15591 - 9,

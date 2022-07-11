@@ -69,9 +69,9 @@ class ChordDecoder(nn.Module):
 
     def recon_loss(self, c, recon_root, recon_chroma, recon_bass):
         loss_fun = self.loss_func
-        root = c[:, :, 0:12].max(-1)[-1].view(-1).contiguous()
-        chroma = c[:, :, 12:24].long().view(-1).contiguous()
-        bass = c[:, :, 24:].max(-1)[-1].view(-1).contiguous()
+        root = c[:, :, 0 : 12].max(-1)[-1].view(-1).contiguous()
+        chroma = c[:, :, 12 : 24].long().view(-1).contiguous()
+        bass = c[:, :, 24 :].max(-1)[-1].view(-1).contiguous()
 
         recon_root = recon_root.view(-1, 12).contiguous()
         recon_chroma = recon_chroma.view(-1, 2).contiguous()

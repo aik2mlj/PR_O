@@ -63,7 +63,7 @@ def dedup_note_matrix(notes):
     notes_dedup = []
     for i, note in enumerate(notes):
         if i != 0:
-            if note[:4] != last[:4]:
+            if note[: 4] != last[: 4]:
                 # if start, duration and pitch are not the same
                 notes_dedup.append(note)
         else:
@@ -137,7 +137,7 @@ def retrieve_midi_from_chd(chords, output_fpath):
     piano = pm.Instrument(program=piano_program)
     for beat, chord in enumerate(chords):
         root = chord[0]
-        chroma = chord[1:13]
+        chroma = chord[1 : 13]
         bass = chord[13]
 
         chroma = np.roll(chroma, -bass)

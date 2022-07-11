@@ -1,6 +1,5 @@
 import numpy as np
 
-
 N_BIN = 4  # the quantization bins of a beat
 SEG_LGTH = 8  # the total beats of a segment
 
@@ -20,7 +19,6 @@ INPUT_SR = 16000
 F_MIN = 30
 F_MAX = None  # torchaudio default
 NORM = None  # torchaudio default
-
 
 MAX_KEPT_RATIO = 0.7
 MIN_KEPT_RATIO = 0.25

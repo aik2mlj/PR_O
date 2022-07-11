@@ -13,9 +13,9 @@ class Audio2Symb(PytorchModel):
     """ The proposed audio-to-symbolic C-VAE model. """
 
     writer_names = [
-        'loss', 'pno_tree_l', 'pitch_l', 'dur_l', 'kl_l', 'kl_chd', 'kl_aud',
-        'kl_sym', 'chord_l', 'root_l', 'chroma_l', 'bass_l', 'feat_l',
-        'bass_feat_l', 'int_feat_l', 'rhy_feat_l', 'beta'
+        'loss', 'pno_tree_l', 'pitch_l', 'dur_l', 'kl_l', 'kl_chd', 'kl_aud', 'kl_sym',
+        'chord_l', 'root_l', 'chroma_l', 'bass_l', 'feat_l', 'bass_feat_l',
+        'int_feat_l', 'rhy_feat_l', 'beta'
     ]
 
     def __init__(
@@ -140,9 +140,8 @@ class Audio2Symb(PytorchModel):
             recon_feat, dist_chd, dist_aud, dist_sym
 
     def loss_function(
-        self, pno_tree, feat, chd, recon_pitch, recon_dur, recon_root,
-        recon_chroma, recon_bass, recon_feat, dist_chd, dist_aud, dist_sym,
-        beta, weights
+        self, pno_tree, feat, chd, recon_pitch, recon_dur, recon_root, recon_chroma,
+        recon_bass, recon_feat, dist_chd, dist_aud, dist_sym, beta, weights
     ):
         """ Compute the loss from ground truth and the output of self.run()"""
         # pianotree recon loss
@@ -218,9 +217,8 @@ class Audio2Symb(PytorchModel):
             self.run(pno_tree, chd, spec, pr_mat, feat, tfr1, tfr2, tfr3)
 
         return self.loss_function(
-            pno_tree, feat, chd, recon_pitch, recon_dur, recon_root,
-            recon_chroma, recon_bass, recon_feat, dist_chd, dist_aud, dist_sym,
-            beta, weights
+            pno_tree, feat, chd, recon_pitch, recon_dur, recon_root, recon_chroma,
+            recon_bass, recon_feat, dist_chd, dist_aud, dist_sym, beta, weights
         )
 
     @classmethod
@@ -258,8 +256,8 @@ class Audio2Symb(PytorchModel):
         pianotree_dec = PianoTreeDecoder(z_size=z_pt_dim, feat_emb_dim=64)
 
         model = cls(
-            name, device, chord_enc, chord_dec, transcriber, frame_enc,
-            prmat_enc, feat_dec, pianotree_dec, stage
+            name, device, chord_enc, chord_dec, transcriber, frame_enc, prmat_enc,
+            feat_dec, pianotree_dec, stage
         ).to(device)
         if model_path is not None:
             model.load_model(model_path=model_path, map_location=device)
@@ -295,9 +293,7 @@ class Audio2Symb(PytorchModel):
                 self.pianotree_dec(z, True, None, None, 0., 0., feat_emb)
 
         # convert to (argmax) pianotree format, numpy array.
-        pred = self.pianotree_dec.output_to_numpy(
-            recon_pitch.cpu(), recon_dur.cpu()
-        )[0]
+        pred = self.pianotree_dec.output_to_numpy(recon_pitch.cpu(), recon_dur.cpu())[0]
         return pred
 
 
@@ -310,8 +306,8 @@ class Audio2SymbNoChord(PytorchModel):
     """
 
     writer_names = [
-        'loss', 'pno_tree_l', 'pitch_l', 'dur_l', 'kl_l', 'kl_aud', 'kl_sym',
-        'feat_l', 'bass_feat_l', 'int_feat_l', 'rhy_feat_l', 'beta'
+        'loss', 'pno_tree_l', 'pitch_l', 'dur_l', 'kl_l', 'kl_aud', 'kl_sym', 'feat_l',
+        'bass_feat_l', 'int_feat_l', 'rhy_feat_l', 'beta'
     ]
 
     def __init__(
@@ -417,8 +413,8 @@ class Audio2SymbNoChord(PytorchModel):
         return recon_pitch, recon_dur, recon_feat, dist_aud, dist_sym
 
     def loss_function(
-        self, pno_tree, feat, recon_pitch, recon_dur, recon_feat, dist_aud,
-        dist_sym, beta, weights
+        self, pno_tree, feat, recon_pitch, recon_dur, recon_feat, dist_aud, dist_sym,
+        beta, weights
     ):
         """ Compute the loss from ground truth and the output of self.run()"""
         # pianotree recon loss
@@ -486,8 +482,8 @@ class Audio2SymbNoChord(PytorchModel):
             self.run(pno_tree, spec, pr_mat, feat, tfr1, tfr2)
 
         return self.loss_function(
-            pno_tree, feat, recon_pitch, recon_dur, recon_feat, dist_aud,
-            dist_sym, beta, weights
+            pno_tree, feat, recon_pitch, recon_dur, recon_feat, dist_aud, dist_sym,
+            beta, weights
         )
 
     @classmethod
@@ -521,8 +517,8 @@ class Audio2SymbNoChord(PytorchModel):
         pianotree_dec = PianoTreeDecoder(z_size=z_pt_dim, feat_emb_dim=64)
 
         model = cls(
-            name, device, transcriber, frame_enc, prmat_enc, feat_dec,
-            pianotree_dec, stage
+            name, device, transcriber, frame_enc, prmat_enc, feat_dec, pianotree_dec,
+            stage
         ).to(device)
         if model_path is not None:
             model.load_model(model_path=model_path, map_location=device)
@@ -556,9 +552,7 @@ class Audio2SymbNoChord(PytorchModel):
                 self.pianotree_dec(z, True, None, None, 0., 0., feat_emb)
 
         # convert to (argmax) pianotree format, numpy array.
-        pred = self.pianotree_dec.output_to_numpy(
-            recon_pitch.cpu(), recon_dur.cpu()
-        )[0]
+        pred = self.pianotree_dec.output_to_numpy(recon_pitch.cpu(), recon_dur.cpu())[0]
         return pred
 
 
@@ -631,9 +625,7 @@ class Audio2SymbSupervised(PytorchModel):
 
         return recon_pitch, recon_dur, dist_z
 
-    def loss_function(
-        self, pno_tree, recon_pitch, recon_dur, dist_z, beta, weights
-    ):
+    def loss_function(self, pno_tree, recon_pitch, recon_dur, dist_z, beta, weights):
         """ Compute the loss from ground truth and the output of self.run()"""
         # pianotree recon loss
         pno_tree_l, pitch_l, dur_l = \
@@ -686,11 +678,7 @@ class Audio2SymbSupervised(PytorchModel):
 
     @classmethod
     def init_model(
-        cls,
-        kl_penalty=False,
-        z_dim=512,
-        transcriber_path=None,
-        model_path=None
+        cls, kl_penalty=False, z_dim=512, transcriber_path=None, model_path=None
     ):
         """Fast model initialization."""
 
@@ -709,12 +697,7 @@ class Audio2SymbSupervised(PytorchModel):
         pianotree_dec = PianoTreeDecoder(z_size=z_dim, feat_emb_dim=0)
 
         model = cls(
-            name,
-            device,
-            transcriber,
-            frame_enc,
-            pianotree_dec,
-            kl_penalty=kl_penalty
+            name, device, transcriber, frame_enc, pianotree_dec, kl_penalty=kl_penalty
         ).to(device)
         if model_path is not None:
             model.load_model(model_path=model_path, map_location=device)
@@ -737,7 +720,5 @@ class Audio2SymbSupervised(PytorchModel):
                 self.pianotree_dec(z, True, None, None, 0., 0., None)
 
         # convert to (argmax) pianotree format, numpy array.
-        pred = self.pianotree_dec.output_to_numpy(
-            recon_pitch.cpu(), recon_dur.cpu()
-        )[0]
+        pred = self.pianotree_dec.output_to_numpy(recon_pitch.cpu(), recon_dur.cpu())[0]
         return pred

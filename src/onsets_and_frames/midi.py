@@ -20,9 +20,8 @@ def parse_midi(path):
         time += message.time
 
         if (
-            message.type == "control_change"
-            and message.control == 64
-            and (message.value >= 64) != sustain
+            message.type == "control_change" and message.control == 64 and
+            (message.value >= 64) != sustain
         ):
             # sustain pedal state has just changed
             sustain = message.value >= 64
@@ -59,10 +58,8 @@ def parse_midi(path):
             # if the sustain pedal is active at offset, find when the sustain ends
             offset = next(
                 n
-                for n in events[offset["index"] + 1 :]
-                if n["type"] == "sustain_off"
-                or n["note"] == onset["note"]
-                or n is events[-1]
+                for n in events[offset["index"] + 1 :] if n["type"] == "sustain_off" or
+                n["note"] == onset["note"] or n is events[-1]
             )
 
         note = (onset["time"], offset["time"], onset["note"], onset["velocity"])
@@ -131,11 +128,15 @@ if __name__ == "__main__":
     def process(input_file, output_file):
         midi_data = parse_midi(input_file)
         np.savetxt(
-            output_file, midi_data, "%.6f", "\t", header="onset\toffset\tnote\tvelocity"
+            output_file,
+            midi_data,
+            "%.6f",
+            "\t",
+            header="onset\toffset\tnote\tvelocity"
         )
 
     def files():
-        for input_file in tqdm(sys.argv[1:]):
+        for input_file in tqdm(sys.argv[1 :]):
             if input_file.endswith(".mid"):
                 output_file = input_file[:-4] + ".tsv"
             elif input_file.endswith(".midi"):

@@ -16,7 +16,6 @@ import numpy as np
 
 
 class SongNpz:
-
     """
     A file loader to read from `data/quantized_pop909_4_bin`, containing
     symbolic data (tracks, chords, beats) stroed in .npz files.
@@ -26,7 +25,6 @@ class SongNpz:
     >>> song = SongNpz(song_id)
     >>> song.load()
     """
-
     def __init__(self, song_id):
         song_id = str_song_id(song_id)
         self.song_id = song_id
@@ -118,7 +116,7 @@ class SongNpz:
 
         s_ind = self.start_table[db][trk_nos]
         e_ind = self.start_table[db + SEG_LGTH][trk_nos]
-        seg_mats = [mat[s:e] for s, e, mat in zip(s_ind, e_ind, note_mats)]
+        seg_mats = [mat[s : e] for s, e, mat in zip(s_ind, e_ind, note_mats)]
         return seg_mats
 
     def brg_pno_at_db(self, db):
@@ -145,7 +143,6 @@ class SongNpz:
 
 
 class SongFolder:
-
     """
     A file loader to read original POP909 data from `data/audio-midi-combined`.
     * original midi file
@@ -154,7 +151,6 @@ class SongFolder:
 
     In the current implementation, only split accompaniment is accessible.
     """
-
     def __init__(self, song_id):
         song_id = str_song_id(song_id)
         self.song_id = song_id
@@ -166,7 +162,6 @@ class SongFolder:
 
 
 class SongStretched:
-
     """
     A file loader to read from `data/audio_stretched` containing time-stretched
     and re-sampled audio.
@@ -177,7 +172,6 @@ class SongStretched:
     * The pickle dict is a mapping from beats sec's (dict key) to the starting
     frames in the wav file (dict value).
     """
-
     def __init__(self, song_id):
         song_id = str_song_id(song_id)
         self.audio_stretched_path = STRETCHED_AUDIO_NPY_PATH
@@ -198,7 +192,6 @@ class SongStretched:
 
 
 class AudioMidiSampleTemplate:
-
     """
     A template file loader to read complete data of a song including SongNpz,
     SongFolder, and SongStretched.
@@ -209,7 +202,6 @@ class AudioMidiSampleTemplate:
       downbeat. The function is called by __getitem__.
     * __getitem__: returns the i-th music segment.
     """
-
     def __init__(self, song_id):
         self.song_npz = SongNpz(song_id)
         self.song_folder = SongFolder(song_id)
@@ -288,7 +280,6 @@ class AudioMidiSampleTemplate:
 
 
 class TrainDataSample(AudioMidiSampleTemplate):
-
     """
     The class is used to retrieved segments in the training phase. The segment
     contains chord, piano-roll representation, audio, PianoTree representation
@@ -300,7 +291,6 @@ class TrainDataSample(AudioMidiSampleTemplate):
     - Stage-2a (fine-tuning, pure a2s): corrupt ignored, autoregressive=False
     - Stage-2b (fine-tuning, prev-2bar): corrupt ignored, autoregressive=True
     """
-
     def __init__(
         self, song_id, audio_pre_step=1000, corrupt=False, autoregressive=False
     ):
@@ -420,7 +410,7 @@ class TrainDataSample(AudioMidiSampleTemplate):
                 dtype=self.stretched_wav.dtype,
                 device=self.stretched_wav.device,
             )
-            return torch.cat([zero_pads, self.stretched_wav[0:e_frame]], -1)
+            return torch.cat([zero_pads, self.stretched_wav[0 : e_frame]], -1)
 
     def _store(self, db):
         self.store_brg_pno_mat(db)

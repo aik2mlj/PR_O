@@ -46,9 +46,9 @@ class PianoRollAudioDataset(Dataset):
             begin = step_begin * HOP_LENGTH
             end = begin + self.sequence_length
 
-            result["audio"] = data["audio"][begin:end].to(self.device)
-            result["label"] = data["label"][step_begin:step_end, :].to(self.device)
-            result["velocity"] = data["velocity"][step_begin:step_end, :].to(
+            result["audio"] = data["audio"][begin : end].to(self.device)
+            result["label"] = data["label"][step_begin : step_end, :].to(self.device)
+            result["velocity"] = data["velocity"][step_begin : step_end, :].to(
                 self.device
             )
         else:
@@ -126,10 +126,10 @@ class PianoRollAudioDataset(Dataset):
             offset_right = min(n_steps, frame_right + HOPS_IN_OFFSET)
 
             f = int(note) - MIN_MIDI
-            label[left:onset_right, f] = 3
-            label[onset_right:frame_right, f] = 2
-            label[frame_right:offset_right, f] = 1
-            velocity[left:frame_right, f] = vel
+            label[left : onset_right, f] = 3
+            label[onset_right : frame_right, f] = 2
+            label[frame_right : offset_right, f] = 1
+            velocity[left : frame_right, f] = vel
 
         data = dict(path=audio_path, audio=audio, label=label, velocity=velocity)
         torch.save(data, saved_data_path)
@@ -179,8 +179,7 @@ class MAESTRO(PianoRollAudioDataset):
                             metadata["audio_filename"][row].replace(".wav", ".flac"),
                         ),
                         os.path.join("./", metadata["midi_filename"][row]),
-                    )
-                    for row in metadata["split"].keys()
+                    ) for row in metadata["split"].keys()
                     if metadata["split"][row] == group
                 ]
             )
@@ -192,9 +191,7 @@ class MAESTRO(PianoRollAudioDataset):
                             self.path, row["audio_filename"].replace(".wav", ".flac")
                         ),
                         os.path.join(self.path, row["midi_filename"]),
-                    )
-                    for row in metadata
-                    if row["split"] == group
+                    ) for row in metadata if row["split"] == group
                 ]
             )
 
@@ -202,8 +199,7 @@ class MAESTRO(PianoRollAudioDataset):
                 (
                     audio if os.path.exists(audio) else audio.replace(".flac", ".wav"),
                     midi,
-                )
-                for audio, midi in files
+                ) for audio, midi in files
             ]
 
         result = []

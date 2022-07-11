@@ -19,7 +19,6 @@ import torch
 
 class NoamOpt(OptimizerScheduler):
     "Optim wrapper that implements rate."
-
     def __init__(self, model_size, factor, warmup, optimizer, clip, step=0):
         super(NoamOpt, self).__init__(optimizer, None, clip, step)
         self.warmup = warmup
@@ -43,6 +42,6 @@ class NoamOpt(OptimizerScheduler):
         if step is None:
             step = self._step
         return self.factor * (
-            self.model_size ** (-0.5)
-            * min((step + 1) ** (-0.5), (step + 1) * self.warmup ** (-1.5))
+            self.model_size**(-0.5) *
+            min((step + 1)**(-0.5), (step + 1) * self.warmup**(-1.5))
         )

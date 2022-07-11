@@ -223,7 +223,7 @@ class PianoReductionVAE(PytorchModel):
         rhy_checkpoint = OrderedDict()
         for k, v in checkpoint.items():
             part = k.split('.')[0]
-            name = '.'.join(k.split('.')[1:])
+            name = '.'.join(k.split('.')[1 :])
             if part == 'rhy_encoder':
                 rhy_checkpoint[name] = v
         prmat_enc.load_state_dict(rhy_checkpoint)

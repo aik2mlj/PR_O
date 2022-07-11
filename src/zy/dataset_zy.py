@@ -74,7 +74,6 @@ def collate_fn(batch, device, augment_p, mel_scale):
     2) batching and converting data device and to cuda possibly.
     3) pitch-shift augment the audio data.
     """
-
     def sample_with_p():
         return np.random.choice(np.arange(-6, 6), 1, p=augment_p)[0]
 
@@ -130,9 +129,7 @@ def create_data_loader(dataset, batch_size, shuffle, aug_p, device, num_workers=
 
 
 class AudioMidiDataLoaders(DataLoaders):
-
     """Dataloaders containing train and valid dataloaders."""
-
     def batch_to_inputs(self, batch):
         return batch
 
