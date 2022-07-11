@@ -9,7 +9,7 @@ from data_loader import create_data_loaders
 from utils import estx_to_midi_file
 import torch
 import pretty_midi as pm
-import datetime
+from datetime import datetime
 
 
 def model_compute(model, fname, device):
@@ -41,8 +41,8 @@ if __name__ == "__main__":
     if len(sys.argv) > 2:
         output_fpath = sys.argv[2]
     else:
-        output_fpath = f"exp/inference_[{test}]_{datetime.datetime.now().strftime('%m-%d_%H:%M:%S')}.mid"
+        output_fpath = f"exp/inference_[{test}]_{datetime.now().strftime('%m-%d_%H:%M:%S')}.mid"
 
-    model = prepare_model("PianoReductionVAE", model_path=model_path)
+    model = prepare_model("prvae", model_path=model_path)
     predictions = model_compute(model, test, device)
     estx_to_midi_file(predictions, output_fpath)

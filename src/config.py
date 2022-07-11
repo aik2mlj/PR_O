@@ -9,7 +9,12 @@ from constants import AUG_P
 from dirs import RESULT_PATH
 from train import train_model
 
-PR_CONFIG = {'z_chd_dim': 128, 'z_aud_dim': 192, 'z_sym_dim': 192}
+PR_CONFIG = {'z_chd_dim': 256, 'z_sym_dim': 256}
+PR_PTTXTENC_CONFIG = {
+    'z_chd_dim': 256,
+    'z_sym_dim': 256,
+    'pretrained_path': 'data/Polydis_pretrained/model_master_final.pt'
+}
 
 NOCHD_CONFIG = {'z_aud_dim': 320, 'z_sym_dim': 192}
 
@@ -36,10 +41,17 @@ N_EPOCH = 100
 
 
 def prepare_model(model_id, model_path=None):
-    if model_id == 'PianoReductionVAE':
+    if model_id == 'prvae':
         model = PianoReductionVAE.init_model(
             z_chd_dim=PR_CONFIG['z_chd_dim'],
             z_sym_dim=PR_CONFIG['z_sym_dim'],
+            model_path=model_path
+        )
+    elif model_id == "prvae_pttxtenc":
+        model = PianoReductionVAE.init_model_pretrained_txtenc(
+            z_chd_dim=PR_PTTXTENC_CONFIG['z_chd_dim'],
+            z_sym_dim=PR_PTTXTENC_CONFIG['z_sym_dim'],
+            pretrained_path=PR_PTTXTENC_CONFIG['pretrained_path'],
             model_path=model_path
         )
     else:
@@ -78,7 +90,7 @@ def result_path_folder_path(model_id):
 
 class TrainingCall:
     def __init__(self, model_id):
-        assert model_id in ["PianoReductionVAE"]
+        assert model_id in ["prvae", "prvae_pttxtenc"]
 
         self.model_id = model_id
         self.result_path = result_path_folder_path(model_id)

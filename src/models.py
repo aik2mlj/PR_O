@@ -21,9 +21,16 @@ class PianoReductionVAE(PytorchModel):
     ]
 
     def __init__(
-        self, name, device, chord_enc: ChordEncoder, chord_dec: ChordDecoder,
-        prmat_enc: TextureEncoder, diffusion_nn: NaiveNN, feat_dec: FeatDecoder,
-        pianotree_dec: PianoTreeDecoder
+        self,
+        name,
+        device,
+        chord_enc: ChordEncoder,
+        chord_dec: ChordDecoder,
+        prmat_enc: TextureEncoder,
+        diffusion_nn: NaiveNN,
+        feat_dec: FeatDecoder,
+        pianotree_dec: PianoTreeDecoder,
+        is_pretrained_prmat_enc,
     ):
 
         super(PianoReductionVAE, self).__init__(name, device)
@@ -39,6 +46,8 @@ class PianoReductionVAE(PytorchModel):
         self.feat_dec = feat_dec
         self.feat_emb_layer = nn.Linear(3, 64)
         self.pianotree_dec = pianotree_dec
+
+        self.is_pretrained_prmat_enc = is_pretrained_prmat_enc
 
     @property
     def z_chd_dim(self):
@@ -58,7 +67,11 @@ class PianoReductionVAE(PytorchModel):
         z_chd = dist_chd.rsample()
 
         # symbolic-texture representation
-        dist_x_sym = self.prmat_enc(pr_mat)
+        if self.is_pretrained_prmat_enc:
+            with torch.no_grad():
+                dist_x_sym = self.prmat_enc(pr_mat)
+        else:
+            dist_x_sym = self.prmat_enc(pr_mat)
         # z_x_sym = dist_x_sym.rsample()
         # print(dist_x_sym)
 
@@ -167,7 +180,7 @@ class PianoReductionVAE(PytorchModel):
     def init_model(cls, z_chd_dim=128, z_sym_dim=192, model_path=None):
         """Fast model initialization."""
 
-        name = 'PianoReductionVAE'
+        name = 'prvae'
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         chord_enc = ChordEncoder(36, 256, z_chd_dim)
@@ -184,10 +197,53 @@ class PianoReductionVAE(PytorchModel):
 
         model = cls(
             name, device, chord_enc, chord_dec, prmat_enc, diffusion_nn, feat_dec,
-            pianotree_dec
+            pianotree_dec, False
         ).to(device)
         if model_path is not None:
             model.load_model(model_path=model_path, map_location=device)
+        return model
+
+    @classmethod
+    def init_model_pretrained_txtenc(
+        cls, z_chd_dim=256, z_sym_dim=256, pretrained_path=None, model_path=None
+    ):
+        """
+        Fast model initialization with pretrained texture encoder from Polydis
+        """
+        name = 'prvae_pttxtenc'
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        chord_enc = ChordEncoder(36, 256, z_chd_dim)
+        chord_dec = ChordDecoder(z_dim=z_chd_dim)
+
+        # load pretrained texture encoder from ziyu's trained model
+        prmat_enc = TextureEncoder(z_dim=z_sym_dim)
+        checkpoint = torch.load(pretrained_path)
+        from collections import OrderedDict
+        rhy_checkpoint = OrderedDict()
+        for k, v in checkpoint.items():
+            part = k.split('.')[0]
+            name = '.'.join(k.split('.')[1:])
+            if part == 'rhy_encoder':
+                rhy_checkpoint[name] = v
+        prmat_enc.load_state_dict(rhy_checkpoint)
+        prmat_enc.to(device)
+
+        diffusion_nn = NaiveNN(z_sym_dim, z_sym_dim)
+
+        feat_dec = FeatDecoder(z_dim=z_sym_dim)
+
+        z_pt_dim = z_chd_dim + z_sym_dim
+        pianotree_dec = PianoTreeDecoder(z_size=z_pt_dim, feat_emb_dim=64)
+
+        model = cls(
+            name, device, chord_enc, chord_dec, prmat_enc, diffusion_nn, feat_dec,
+            pianotree_dec, True
+        ).to(device)
+        if model_path is not None:
+            model.load_model(model_path=model_path, map_location=device)
+
+        print("model initialized")
         return model
 
     def inference(self, chord, pr_mat):

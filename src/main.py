@@ -1,12 +1,13 @@
 from config import TrainingCall
+from datetime import datetime
 
 # If test_mode is True, will load a mini dataset to debug the code.
 test_mode = False
 
-# model_id in ['a2s', 'a2s-nochd', 'supervised', 'supervised+kl']
-model_id = "PianoReductionVAE"
+# model_id in ['prvae', 'prvae_pttxtenc']
+model_id = "prvae_pttxtenc"
 
-# A pre-trained a2s model path. Used when stage > 0.
+# A pre-trained model path. Probably never used.
 model_path = None
 
 # In case the training is terminated, checkpoint saving is not implemented in
@@ -14,6 +15,9 @@ model_path = None
 run_epochs = None
 
 if __name__ == '__main__':
+    print(
+        f"Start training: {model_id}, test_mode={test_mode} at {datetime.now().strftime('%m-%d_%H:%M:%S')}"
+    )
     training = TrainingCall(model_id=model_id)
     training(
         test_mode=test_mode,

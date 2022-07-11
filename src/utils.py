@@ -186,6 +186,7 @@ def estx_to_midi_file(est_x, fpath):
             for kth_key in step:
                 assert len(kth_key) == 6
                 if not (kth_key[0] >= 0 and kth_key[0] <= 127):
+                    # rest key
                     # print(f"({two_bar_ind}, {step_ind}, somekey, 0): {kth_key[0]}")
                     continue
 
@@ -195,7 +196,7 @@ def estx_to_midi_file(est_x, fpath):
                     (kth_key[2] << 3) + (kth_key[1] << 4) + 1
                 )
                 note = pm.Note(
-                    velocity=100,
+                    velocity=80,
                     pitch=int(kth_key[0]),
                     start=t,
                     end=t + int(dur) * 1 / 8,
