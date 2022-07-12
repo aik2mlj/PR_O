@@ -329,6 +329,7 @@ class PianoReductionVAE(PytorchModel):
         self.pianotree_dec = pianotree_dec
 
         self.is_pretrained_prmat_enc = is_pretrained_prmat_enc
+        print(f"use pt_prmat_enc : {self.is_pretrained_prmat_enc}")
 
     @property
     def z_chd_dim(self):
@@ -338,7 +339,7 @@ class PianoReductionVAE(PytorchModel):
     def z_sym_dim(self):
         return self.prmat_enc.z_dim
 
-    def run(self, pno_tree_y, chd, pr_mat, feat_y, tfr1, tfr2, tfr3):
+    def run(self, pno_tree_y, chd, pr_mat, feat_y, prmat_y, tfr1, tfr2, tfr3):
         """
         Forward path of the model in training (w/o computing loss).
         """
@@ -358,8 +359,11 @@ class PianoReductionVAE(PytorchModel):
 
         # diffusion model: transform z_x_txt to z_y_txt
         dist_sym = self.diffusion_nn(dist_x_sym)
-        # print(dist_sym)
         z_sym = dist_sym.rsample()  # this is z_y_txt
+
+        #: directly use dist_x_sym
+        # dist_sym = dist_x_sym
+        # z_sym = dist_sym.rsample()
 
         # z
         z = torch.cat([z_chd, z_sym], -1)
@@ -426,6 +430,7 @@ class PianoReductionVAE(PytorchModel):
         chd,
         pr_mat,
         feat_y,
+        prmat_y,
         tfr1,
         tfr2,
         tfr3,
@@ -450,7 +455,7 @@ class PianoReductionVAE(PytorchModel):
         (
             recon_pitch, recon_dur, recon_root, recon_chroma, recon_bass, recon_feat,
             dist_chd, dist_sym
-        ) = self.run(pno_tree_y, chd, pr_mat, feat_y, tfr1, tfr2, tfr3)
+        ) = self.run(pno_tree_y, chd, pr_mat, feat_y, prmat_y, tfr1, tfr2, tfr3)
 
         return self.loss_function(
             pno_tree_y, feat_y, chd, recon_pitch, recon_dur, recon_root, recon_chroma,
@@ -477,8 +482,15 @@ class PianoReductionVAE(PytorchModel):
         pianotree_dec = PianoTreeDecoder(z_size=z_pt_dim, feat_emb_dim=64)
 
         model = cls(
-            name, device, chord_enc, chord_dec, prmat_enc, diffusion_nn, feat_dec,
-            pianotree_dec, False
+            name,
+            device,
+            chord_enc,
+            chord_dec,
+            prmat_enc,
+            diffusion_nn,
+            feat_dec,
+            pianotree_dec,
+            is_pretrained_prmat_enc=False
         ).to(device)
         if model_path is not None:
             model.load_model(model_path=model_path, map_location=device)
@@ -508,8 +520,15 @@ class PianoReductionVAE(PytorchModel):
         pianotree_dec = PianoTreeDecoder(z_size=z_pt_dim, feat_emb_dim=64)
 
         model = cls(
-            name, device, chord_enc, chord_dec, prmat_enc, diffusion_nn, feat_dec,
-            pianotree_dec, True
+            name,
+            device,
+            chord_enc,
+            chord_dec,
+            prmat_enc,
+            diffusion_nn,
+            feat_dec,
+            pianotree_dec,
+            is_pretrained_prmat_enc=True
         ).to(device)
         if model_path is not None:
             model.load_model(model_path=model_path, map_location=device)
@@ -523,7 +542,8 @@ class PianoReductionVAE(PytorchModel):
 
         :param chord: (B, 8, 36) chord input
         :param pr_mat: (B, 32, 128) symbolic piano roll matrices.
-        :param use_zx_txt: True when using zx_txt (not going through diffusion_nn)
+        :param use_zx_txt: True when using zx_txt (not going through diffusion_nn,
+                for debugging)
         :return: pianotree prediction (B, 32, 15, 6) numpy array.
         """
         print("inferencing no contrastive...")
@@ -534,6 +554,11 @@ class PianoReductionVAE(PytorchModel):
 
             dist_x_sym = self.prmat_enc(pr_mat)
             if use_zx_txt:
+                print("using zx_txt...")
+                # pt_prmat_enc_tmp = load_pretrained_txt_enc(
+                #     "data/Polydis_pretrained/model_master_final.pt", 256, self.device
+                # )
+                # dist_x_sym = pt_prmat_enc_tmp(pr_mat)
                 z_sym = dist_x_sym.mean  # this is z_x_sym
             else:
                 dist_sym = self.diffusion_nn(dist_x_sym)

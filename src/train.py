@@ -55,11 +55,11 @@ def train_model(
     # constants
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    clip = 3
+    clip = 1
 
     weights = [1, 0.5]
 
-    tf_rates = [(0.8, 0.3), (0.8, 0.5), (0.5, 0)]
+    tf_rates = [(0.6, 0), (0.5, 0), (0.5, 0)]
 
     parallel = (
         parallel

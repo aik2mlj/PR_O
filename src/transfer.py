@@ -12,7 +12,6 @@ import pretty_midi as pm
 from datetime import datetime
 
 model_name = "prvae_pttxtenc"
-# model_path = "result/prvae_pttxtenc/result_2022-07-11_162707"
 
 
 def model_compute(model, fname, device):

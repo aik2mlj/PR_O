@@ -20,26 +20,23 @@ PR_PTTXTENC_CONFIG = {
     'pt_polydis_path': 'data/Polydis_pretrained/model_master_final.pt'
 }
 
-SUPERVISED_CONFIG = {'z_dim': 512}
-
-# Ensuring path is valid when importing from outside the project.
-PARAM_PATH = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', 'params'))
-TRANSCRIBER_PATH = os.path.join(PARAM_PATH, 'pretrained_onsets_and_frames.pt')
+# SUPERVISED_CONFIG = {'z_dim': 512}
 
 TRAIN_CONFIG = {
-    'batch_size': 64,
+    'batch_size': 128,
     'num_workers': 0,
     'meter': 2,
     'n_subdiv': 2,
     'parallel': False,
-    'load_data_at_start': False
+    'load_data_at_start': False,
+    'lr': 1e-3,
+    'beta': 0.1,
+    'n_epoch': 50,
 }
 
-LR = 5e-5
-BETA = 0.5
-CORRUPT = {0: False, 1: True, 2: True, 3: False}
-AUTOREGRESSIVE = {0: False, 1: False, 2: False, 3: True}
-N_EPOCH = 100
+# LR = 1e-3
+# BETA = 0.1
+# N_EPOCH = 50
 
 
 def prepare_model(model_id, model_path=None):
@@ -98,6 +95,15 @@ class TrainingCall:
         self.model_id = model_id
         self.result_path = result_path_folder_path(model_id)
 
+        # print training setting
+        print("====== TrainingCall info:")
+        if model_id == "prvae":
+            print(f"prvae: {PR_CONFIG}")
+        else:
+            print(f"prvae_pttxtenc: {PR_PTTXTENC_CONFIG}")
+        print(f"train_config: {TRAIN_CONFIG}")
+        print("======")
+
     def __call__(self, test_mode, model_path, run_epochs, readme_fn):
         model = prepare_model(self.model_id, model_path)
         data_loaders = prepare_data_loaders(test_mode)
@@ -105,12 +111,12 @@ class TrainingCall:
             model=model,
             data_loaders=data_loaders,
             readme_fn=readme_fn,
-            n_epoch=N_EPOCH,
+            n_epoch=TRAIN_CONFIG['n_epoch'],
             parallel=TRAIN_CONFIG['parallel'],
-            lr=LR,
+            lr=TRAIN_CONFIG['lr'],
             writer_names=model.writer_names,
             load_data_at_start=TRAIN_CONFIG['load_data_at_start'],
-            beta=BETA,
+            beta=TRAIN_CONFIG['beta'],
             run_epochs=run_epochs,
             result_path=self.result_path
         )
