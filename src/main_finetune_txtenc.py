@@ -4,8 +4,9 @@ from datetime import datetime
 # If test_mode is True, will load a mini dataset to debug the code.
 test_mode = False
 
-# model_id in ['prvae', 'prvae_pttxtenc', 'prvae_pttxtenc_contra', 'prvae_contra']
-model_id = "prvae"
+# model_id in ['prvae', 'prvae_pttxtenc', 'prvae_pttxtenc_contra', 'prvae_contra',
+#        'finetune_txtenc']
+model_id = "finetune_txtenc"
 
 # A pre-trained model path. Probably never used.
 model_path = None

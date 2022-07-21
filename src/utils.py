@@ -112,6 +112,15 @@ def chd_to_onehot(chd):
     return onehot_chd
 
 
+def onehot_to_chd(onehot):
+    n_step = onehot.shape[0]
+    chd = np.zeros((n_step, 14), dtype=np.int64)
+    chd[:, 0] = np.argmax(onehot[:, 0 : 12], axis=1)
+    chd[:, 1 : 13] = onehot[:, 12 : 24]
+    chd[:, 13] = np.argmax(onehot[:, 24 : 36], axis=1)
+    return chd
+
+
 def nmat_to_pr_mat_repr(nmat, n_step=32):
     pr_mat = np.zeros((n_step, 128), dtype=np.int64)
     for o, p, d in nmat:
@@ -186,6 +195,62 @@ def scheduled_sampling(i, high=0.7, low=0.05):
     z = 1 / (1 + np.exp(x))
     y = (high - low) * z + low
     return y
+
+
+def retrieve_midi_from_chd(chords, output_fpath, one_beat=0.5):
+    """
+    retrieve midi from chords
+    """
+    midi = pm.PrettyMIDI()
+    piano_program = pm.instrument_name_to_program("Acoustic Grand Piano")
+    piano = pm.Instrument(program=piano_program)
+    t = 0.
+    for seg in chords:
+        for beat, chord in enumerate(seg):
+            root = chord[0]
+            chroma = chord[1 : 13]
+            bass = chord[13]
+
+            chroma = np.roll(chroma, -bass)
+            c3 = 48
+            for i, n in enumerate(chroma):
+                if n == 1:
+                    note = pm.Note(
+                        velocity=80,
+                        pitch=c3 + i + bass,
+                        start=t * one_beat,
+                        end=(t + 1) * one_beat
+                    )
+                    piano.notes.append(note)
+            t += 1
+
+    midi.instruments.append(piano)
+    midi.write(output_fpath)
+
+
+def retrieve_midi_from_prmat(prmat, output_fpath, one_beat=0.5):
+    """
+    retrieve midi from piano-roll matrix
+    """
+    midi = pm.PrettyMIDI()
+    piano_program = pm.instrument_name_to_program("Acoustic Grand Piano")
+    piano = pm.Instrument(program=piano_program)
+    t = 0.
+    for seg in prmat:
+        for step in seg:
+            for key, dur in enumerate(step):
+                if dur > 0:
+                    note = pm.Note(
+                        velocity=80,
+                        pitch=int(key),
+                        start=t,
+                        end=t + int(dur) * one_beat / 4.,
+                    )
+                    piano.notes.append(note)
+            t += one_beat / 4.
+
+    midi.instruments.append(piano)
+    midi.write(output_fpath)
 
 
 def estx_to_midi_file(est_x, fpath):

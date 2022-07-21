@@ -11,7 +11,7 @@ import torch
 import pretty_midi as pm
 from datetime import datetime
 
-model_name = "prvae_pttxtenc"
+# model_name = "prvae"
 
 
 def model_compute(model, fname, device):
@@ -27,6 +27,8 @@ def model_compute(model, fname, device):
 
 if __name__ == "__main__":
     model_path = sys.argv[1]
+    model_name = model_path.split("/")[1]
+    print(f"model_name: {model_name}")
 
     split_fpath = os.path.join(TRAIN_SPLIT_DIR, "split_dict.pickle")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

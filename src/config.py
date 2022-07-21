@@ -2,7 +2,7 @@ import sys
 import os
 
 # sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..')))
-from models import PianoReductionVAE
+from models import PianoReductionVAE, PianoReductionVAE_contrastive
 from dataset import PianoOrchDataset
 from data_loader import PianoOrchDataLoader, create_data_loaders
 from constants import AUG_P
@@ -29,9 +29,21 @@ TRAIN_CONFIG = {
     'n_subdiv': 2,
     'parallel': False,
     'load_data_at_start': False,
-    'lr': 1e-3,
+    'lr': 1e-4,
     'beta': 0.1,
     'n_epoch': 50,
+}
+
+FINETUNE_CONFIG = {
+    'batch_size': 128,
+    'num_workers': 0,
+    'meter': 2,
+    'n_subdiv': 2,
+    'parallel': False,
+    'load_data_at_start': False,
+    'lr': 1e-5,
+    'beta': 0.1,
+    'n_epoch': 30,
 }
 
 # LR = 1e-3
@@ -44,7 +56,7 @@ def prepare_model(model_id, model_path=None):
         model = PianoReductionVAE.init_model(
             z_chd_dim=PR_CONFIG['z_chd_dim'],
             z_sym_dim=PR_CONFIG['z_sym_dim'],
-            # pt_txtenc_path=PR_PTTXTENC_CONFIG['pt_polydis_path'],
+            pt_txtenc_path=PR_CONFIG['pt_polydis_path'],
             model_path=model_path
         )
     elif model_id == "prvae_pttxtenc":
@@ -54,12 +66,33 @@ def prepare_model(model_id, model_path=None):
             pt_txtenc_path=PR_PTTXTENC_CONFIG['pt_polydis_path'],
             model_path=model_path
         )
+    elif model_id == "prvae_contra":
+        model = PianoReductionVAE_contrastive.init_model(
+            z_chd_dim=PR_CONFIG['z_chd_dim'],
+            z_sym_dim=PR_CONFIG['z_sym_dim'],
+            pt_txtenc_path=PR_CONFIG['pt_polydis_path'],
+            model_path=model_path
+        )
+    elif model_id == "prvae_pttxtenc_contra":
+        model = PianoReductionVAE_contrastive.init_model_pretrained_txtenc(
+            z_chd_dim=PR_PTTXTENC_CONFIG['z_chd_dim'],
+            z_sym_dim=PR_PTTXTENC_CONFIG['z_sym_dim'],
+            pt_txtenc_path=PR_PTTXTENC_CONFIG['pt_polydis_path'],
+            model_path=model_path
+        )
+    elif model_id == "finetune_txtenc":
+        model = PianoReductionVAE.init_model_finetune_txtenc(
+            z_chd_dim=PR_CONFIG['z_chd_dim'],
+            z_sym_dim=PR_CONFIG['z_sym_dim'],
+            pt_txtenc_path=PR_CONFIG['pt_polydis_path'],
+            model_path=model_path
+        )
     else:
         raise NotImplementedError
     return model
 
 
-def prepare_data_loaders(test_mode):
+def prepare_data_loaders(test_mode, model_id):
     if test_mode:
         tv_song_paths = (["bouliane-0", "bouliane-1", "bouliane-2"], ["bouliane-3"])
         train_set, valid_set = PianoOrchDataset.load_with_train_valid_paths(
@@ -77,6 +110,7 @@ def prepare_data_loaders(test_mode):
         num_workers=TRAIN_CONFIG['num_workers'],
         meter=TRAIN_CONFIG['meter'],
         n_subdiv=TRAIN_CONFIG['n_subdiv'],
+        all_x=True if model_id == "finetune_txtenc" else False
     )
 
 
@@ -90,33 +124,55 @@ def result_path_folder_path(model_id):
 
 class TrainingCall:
     def __init__(self, model_id):
-        assert model_id in ["prvae", "prvae_pttxtenc"]
+        assert model_id in [
+            "prvae", "prvae_pttxtenc", "prvae_contra", "prvae_pttxtenc_contra",
+            "finetune_txtenc"
+        ]
 
         self.model_id = model_id
         self.result_path = result_path_folder_path(model_id)
 
         # print training setting
         print("====== TrainingCall info:")
-        if model_id == "prvae":
-            print(f"prvae: {PR_CONFIG}")
-        else:
+        print(f"model: {model_id}")
+        if "pttxtenc" in model_id:
             print(f"prvae_pttxtenc: {PR_PTTXTENC_CONFIG}")
-        print(f"train_config: {TRAIN_CONFIG}")
+        else:
+            print(f"prvae: {PR_CONFIG}")
+        if model_id == "finetune_txtenc":
+            print(f"finetune_config: {FINETUNE_CONFIG}")
+        else:
+            print(f"train_config: {TRAIN_CONFIG}")
         print("======")
 
     def __call__(self, test_mode, model_path, run_epochs, readme_fn):
         model = prepare_model(self.model_id, model_path)
-        data_loaders = prepare_data_loaders(test_mode)
-        train_model(
-            model=model,
-            data_loaders=data_loaders,
-            readme_fn=readme_fn,
-            n_epoch=TRAIN_CONFIG['n_epoch'],
-            parallel=TRAIN_CONFIG['parallel'],
-            lr=TRAIN_CONFIG['lr'],
-            writer_names=model.writer_names,
-            load_data_at_start=TRAIN_CONFIG['load_data_at_start'],
-            beta=TRAIN_CONFIG['beta'],
-            run_epochs=run_epochs,
-            result_path=self.result_path
-        )
+        data_loaders = prepare_data_loaders(test_mode, self.model_id)
+        if self.model_id == "finetune_txtenc":
+            train_model(
+                model=model,
+                data_loaders=data_loaders,
+                readme_fn=readme_fn,
+                n_epoch=FINETUNE_CONFIG['n_epoch'],
+                parallel=FINETUNE_CONFIG['parallel'],
+                lr=FINETUNE_CONFIG['lr'],
+                writer_names=model.writer_names,
+                load_data_at_start=FINETUNE_CONFIG['load_data_at_start'],
+                beta=FINETUNE_CONFIG['beta'],
+                run_epochs=run_epochs,
+                result_path=self.result_path
+            )
+        else:
+            train_model(
+                model=model,
+                data_loaders=data_loaders,
+                readme_fn=readme_fn,
+                n_epoch=TRAIN_CONFIG['n_epoch'],
+                parallel=TRAIN_CONFIG['parallel'],
+                lr=TRAIN_CONFIG['lr'],
+                writer_names=model.writer_names,
+                load_data_at_start=TRAIN_CONFIG['load_data_at_start'],
+                beta=TRAIN_CONFIG['beta'],
+                run_epochs=run_epochs,
+                result_path=self.result_path
+            )

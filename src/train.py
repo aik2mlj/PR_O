@@ -55,7 +55,7 @@ def train_model(
     # constants
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    clip = 1
+    clip = 0.5
 
     weights = [1, 0.5]
 

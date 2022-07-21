@@ -147,6 +147,9 @@ class TrainingInterface:
             outputs = self._sum_parallel_loss(outputs)
             loss = outputs[0]
             loss.backward()
+            if torch.isnan(loss).any():
+                print("loss contains NaN. ignoring...")
+                continue
             torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(), self.opt_scheduler.clip
             )

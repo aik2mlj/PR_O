@@ -26,7 +26,7 @@ class DataSampleNpz:
     `__getitem__` is used for retrieving ready-made input segments to the model
     it will be called in DataLoader
     """
-    def __init__(self, song_fn, load_chord, all_x=False) -> None:
+    def __init__(self, song_fn, load_chord=True, all_x=False) -> None:
         self.dpath = os.path.join(QUANTIZED_DATA_DIR, song_fn)
         self.fpath_x = os.path.join(self.dpath, "orchestra.npz")
         self.fpath_y = os.path.join(self.dpath, "piano.npz")
@@ -322,10 +322,8 @@ class PianoOrchDataset(Dataset):
 
     @classmethod
     def load_with_song_paths(cls, song_paths, **kwargs):
-        # FIXME: kwargs not used
-        data_samples = [
-            DataSampleNpz(song_path, load_chord=True) for song_path in song_paths
-        ]
+        print(f"Dataset kargs: {kwargs}")
+        data_samples = [DataSampleNpz(song_path, **kwargs) for song_path in song_paths]
         return cls(data_samples)
 
     @classmethod
