@@ -4,7 +4,7 @@ import pickle
 import os
 import pretty_midi as pm
 import torch
-from dl_modules import TextureEncoder
+from dl_modules import TextureEncoder, PianoTreeEncoder
 """Project utils"""
 
 
@@ -21,6 +21,22 @@ def load_pretrained_txt_enc(fpath, z_dim, device):
     prmat_enc.load_state_dict(rhy_checkpoint)
     prmat_enc.to(device)
     return prmat_enc
+
+
+def load_pretrained_pianotree_enc(fpath, z_dim, device):
+    # FIXME
+    pianotree_enc = PianoTreeEncoder(device=device, z_size=z_dim)
+    checkpoint = torch.load(fpath)
+    from collections import OrderedDict
+    rhy_checkpoint = OrderedDict()
+    for k, v in checkpoint.items():
+        part = k.split('.')[0]
+        name = '.'.join(k.split('.')[1 :])
+        if part == 'rhy_encoder':
+            rhy_checkpoint[name] = v
+    pianotree_enc.load_state_dict(rhy_checkpoint)
+    pianotree_enc.to(device)
+    return pianotree_enc
 
 
 def read_split_dict(meter, n_subdiv, is_polydis=False):

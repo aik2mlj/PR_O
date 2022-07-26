@@ -26,15 +26,13 @@ class DataSampleNpz:
     `__getitem__` is used for retrieving ready-made input segments to the model
     it will be called in DataLoader
     """
-    def __init__(self, song_fn, load_chord=True, all_x=False) -> None:
+    def __init__(self, song_fn, load_chord=True, type=None) -> None:
         self.dpath = os.path.join(QUANTIZED_DATA_DIR, song_fn)
         self.fpath_x = os.path.join(self.dpath, "orchestra.npz")
         self.fpath_y = os.path.join(self.dpath, "piano.npz")
 
-        # all_x: return x's info, for debug-mode training
-        self.all_x = all_x
-        # if all_x:
-        #     print(f"all_x = {all_x}, this is just Polydis!")
+        # type: None, "all_x" or "pianotree"
+        self.type = type
         """
         notes (onset_beat, onset_bin, duration, pitch, velocity)
         chord for each beat (root, semitone_bitmap, bass)
@@ -227,18 +225,24 @@ class DataSampleNpz:
         self._pianotree_dict_y[db] = nmat_to_pianotree_repr(self._nmat_dict_y[db])
 
     def _store_seg(self, db):
-        if self.all_x:
+        if self.type == "all_x":
             self.store_nmat_seg_x(db)
             self.store_prmat_seg_x(db)
             self.store_features_seg_x(db)
             self.store_pno_tree_seg_x(db)
-        else:
+        elif self.type == "pianotree":
             self.store_nmat_seg_x(db)
+            self.store_pno_tree_seg_x(db)
             self.store_nmat_seg_y(db)
-            self.store_prmat_seg_x(db)
-            self.store_prmat_seg_y(db)
-            self.store_features_seg_y(db)
             self.store_pno_tree_seg_y(db)
+
+        assert self.type is None
+        self.store_nmat_seg_x(db)
+        self.store_nmat_seg_y(db)
+        self.store_prmat_seg_x(db)
+        self.store_prmat_seg_y(db)
+        self.store_features_seg_y(db)
+        self.store_pno_tree_seg_y(db)
 
     def _get_item_by_db(self, db):
         """
@@ -248,13 +252,18 @@ class DataSampleNpz:
 
         self._store_seg(db)
 
-        if self.all_x:
+        if self.type == "all_x":
             seg_chd_x = self.chord_x[db : db + SEG_LGTH]
             seg_prmat_x = self._pr_mat_dict_x[db]
             seg_pno_tree_x = self._pianotree_dict_x[db]
             seg_feat_x = self._feat_dict_x[db]
             return seg_pno_tree_x, seg_chd_x, seg_prmat_x, seg_feat_x, seg_prmat_x
+        elif self.type == "pianotree":
+            seg_pno_tree_x = self._pianotree_dict_x[db]
+            seg_pno_tree_y = self._pianotree_dict_y[db]
+            return seg_pno_tree_x, seg_pno_tree_y
 
+        assert self.type is None
         # chord
         seg_chd_x = self.chord_x[db : db + SEG_LGTH]
         # prmat

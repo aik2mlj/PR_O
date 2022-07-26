@@ -3,6 +3,7 @@ import os
 
 # sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..')))
 from models import PianoReductionVAE, PianoReductionVAE_contrastive
+from model_pnotree import PianoTree_PRVAE
 from dataset import PianoOrchDataset
 from data_loader import PianoOrchDataLoader, create_data_loaders
 from polydis_dataset.dataset_polydis import AudioMidiDataLoaders, create_data_loaders_polydis
@@ -20,6 +21,7 @@ PR_PTTXTENC_CONFIG = {
     'z_sym_dim': 256,
     'pt_polydis_path': 'data/Polydis_pretrained/model_master_final.pt'
 }
+PNOTREE_PR_CONFIG = {"z_dim": 512, "pt_pianotree_path": "TODO"}
 
 # SUPERVISED_CONFIG = {'z_dim': 512}
 
@@ -30,7 +32,7 @@ TRAIN_CONFIG = {
     'n_subdiv': 2,
     'parallel': False,
     'load_data_at_start': False,
-    'lr': 1e-4,
+    'lr': 1e-3,
     'beta': 0.1,
     'n_epoch': 50,
 }
@@ -88,6 +90,12 @@ def prepare_model(model_id, model_path=None):
             pt_txtenc_path=PR_CONFIG['pt_polydis_path'],
             model_path=model_path
         )
+    elif model_id == "pianotree_prvae":
+        model = PianoTree_PRVAE.init_model(
+            z_dim=PNOTREE_PR_CONFIG['z_dim'],
+            pt_enc_path=PNOTREE_PR_CONFIG['pt_pianotree_path'],
+            model_path=model_path
+        )
     else:
         raise NotImplementedError
     return model
@@ -107,13 +115,31 @@ def prepare_data_loaders(test_mode, model_id, dataset_id):
         )
 
     if dataset_id == "pr_o":
-        return create_data_loaders(
-            batch_size=TRAIN_CONFIG['batch_size'],
-            num_workers=TRAIN_CONFIG['num_workers'],
-            meter=TRAIN_CONFIG['meter'],
-            n_subdiv=TRAIN_CONFIG['n_subdiv'],
-            all_x=True if model_id == "finetune_txtenc" else False
-        )
+        if model_id == "finetune_txtenc":
+            return create_data_loaders(
+                batch_size=FINETUNE_CONFIG['batch_size'],
+                num_workers=FINETUNE_CONFIG['num_workers'],
+                meter=FINETUNE_CONFIG['meter'],
+                n_subdiv=FINETUNE_CONFIG['n_subdiv'],
+                type="all_x"
+            )
+        elif model_id == "pianotree_prvae":
+            return create_data_loaders(
+                batch_size=TRAIN_CONFIG['batch_size'],
+                num_workers=TRAIN_CONFIG['num_workers'],
+                meter=TRAIN_CONFIG['meter'],
+                n_subdiv=TRAIN_CONFIG['n_subdiv'],
+                type="pianotree"
+            )
+        else:
+            return create_data_loaders(
+                batch_size=TRAIN_CONFIG['batch_size'],
+                num_workers=TRAIN_CONFIG['num_workers'],
+                meter=TRAIN_CONFIG['meter'],
+                n_subdiv=TRAIN_CONFIG['n_subdiv'],
+                type=None
+            )
+
     elif dataset_id == "polydis":
         return create_data_loaders_polydis(
             batch_size=TRAIN_CONFIG['batch_size'],
@@ -152,6 +178,8 @@ class TrainingCall:
         print(f"model: {model_id}")
         if "pttxtenc" in model_id:
             print(f"prvae_pttxtenc: {PR_PTTXTENC_CONFIG}")
+        elif "pianotree" in model_id:
+            print(f"pianotree_prvae: {PNOTREE_PR_CONFIG}")
         else:
             print(f"prvae: {PR_CONFIG}")
         print(f"dataset_id: {dataset_id}")

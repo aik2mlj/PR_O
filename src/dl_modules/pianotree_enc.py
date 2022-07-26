@@ -4,7 +4,7 @@ from torch.nn.utils.rnn import pack_padded_sequence
 from torch.distributions import Normal
 
 
-class PtvaeEncoder(nn.Module):
+class PianoTreeEncoder(nn.Module):
     def __init__(
         self,
         device,
@@ -22,7 +22,7 @@ class PtvaeEncoder(nn.Module):
         enc_time_hid_size=512,
         z_size=512,
     ):
-        super(PtvaeEncoder, self).__init__()
+        super(PianoTreeEncoder, self).__init__()
 
         # Parameters
         # note and time
