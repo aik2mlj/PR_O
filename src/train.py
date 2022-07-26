@@ -13,6 +13,8 @@ import torch
 from torch import optim
 import os
 from utils import beta_annealing, scheduled_sampling
+from polydis_origin_dataset.dataset_loaders_pod import TrainingVAE as PolydisTrainingVAE
+from polydis_origin_dataset.dataset_loaders_pod import MusicDataLoaders as PolydisDataLoaders
 
 
 class TrainingVAE(TrainingInterface):
@@ -100,17 +102,30 @@ def train_model(
     )
     param_scheduler = ParameterScheduler(**params_dic)
 
-    training = TrainingVAE(
-        device,
-        model,
-        parallel,
-        log_path_mng,
-        data_loaders,
-        summary_writers,
-        optimizer_scheduler,
-        param_scheduler,
-        n_epoch,
-    )
+    if isinstance(data_loaders, PolydisDataLoaders):
+        training = PolydisTrainingVAE(
+            device,
+            model,
+            parallel,
+            log_path_mng,
+            data_loaders,
+            summary_writers,
+            optimizer_scheduler,
+            param_scheduler,
+            n_epoch,
+        )
+    else:
+        training = TrainingVAE(
+            device,
+            model,
+            parallel,
+            log_path_mng,
+            data_loaders,
+            summary_writers,
+            optimizer_scheduler,
+            param_scheduler,
+            n_epoch,
+        )
 
     # Run through the epochs already endured. Similar to (but still different
     # from) loading specific training checkpoints.

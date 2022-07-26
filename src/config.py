@@ -121,6 +121,8 @@ def prepare_data_loaders(test_mode, model_id, dataset_id):
             meter=TRAIN_CONFIG['meter'],
             n_subdiv=TRAIN_CONFIG['n_subdiv'],
         )
+    else:
+        raise RuntimeError
 
 
 def result_path_folder_path(model_id):
