@@ -84,8 +84,8 @@ class PianoReductionVAE_contrastive(PytorchModel):
         # print(dist_x_sym)
 
         # diffusion model: transform z_x_txt to z_y_txt
-        dist_sym = self.diffusion_nn(dist_x_sym)
-        z_sym = dist_sym.rsample()  # this is z_y_txt
+        z_x_sym = dist_x_sym.rsample()
+        z_sym = self.diffusion_nn(z_x_sym)  # this is z_y_txt
 
         # contrastive learning TODO
         with torch.no_grad():
@@ -114,7 +114,7 @@ class PianoReductionVAE_contrastive(PytorchModel):
 
         return (
             recon_pitch, recon_dur, recon_root, recon_chroma, recon_bass, recon_feat,
-            dist_chd, dist_sym, z_sym, z_y_sym
+            dist_chd, dist_x_sym, z_sym, z_y_sym
         )
 
     def loss_function(
@@ -299,11 +299,11 @@ class PianoReductionVAE_contrastive(PytorchModel):
             z_chd = self.chord_enc(chord).mean
 
             dist_x_sym = self.prmat_enc(pr_mat)
+            z_x_sym = dist_x_sym.mean
             if use_zx_txt:
-                z_sym = dist_x_sym.mean  # this is z_x_sym
+                z_sym = z_x_sym  # this is z_x_sym
             else:
-                dist_sym = self.diffusion_nn(dist_x_sym)
-                z_sym = dist_sym.mean  # this is z_y_txt
+                z_sym = self.diffusion_nn(z_x_sym)  # this is z_y_txt
 
             z = torch.cat([z_chd, z_sym], -1)
 
@@ -383,17 +383,15 @@ class PianoReductionVAE(PytorchModel):
                     dist_x_sym = self.prmat_enc(pr_mat)
             else:
                 dist_x_sym = self.prmat_enc(pr_mat)
-            # z_x_sym = dist_x_sym.rsample()
-            # print(dist_x_sym)
 
+            z_x_sym = dist_x_sym.rsample()
+            # print(dist_x_sym)
             if self.prmat_enc_type == "finetune":
                 # do not use nn in between, simply polydis with feats
-                dist_sym = dist_x_sym
-                z_sym = dist_sym.rsample()
+                z_sym = z_x_sym
             else:
                 # diffusion model: transform z_x_txt to z_y_txt
-                dist_sym = self.diffusion_nn(dist_x_sym)
-                z_sym = dist_sym.rsample()  # this is z_y_txt
+                z_sym = self.diffusion_nn(z_x_sym)
 
         except ValueError as e:
             print(e)
@@ -426,7 +424,7 @@ class PianoReductionVAE(PytorchModel):
 
         return (
             recon_pitch, recon_dur, recon_root, recon_chroma, recon_bass, recon_feat,
-            dist_chd, dist_sym
+            dist_chd, dist_x_sym
         )
 
     def loss_function(
@@ -639,16 +637,16 @@ class PianoReductionVAE(PytorchModel):
             z_chd = self.chord_enc(chord).mean
 
             dist_x_sym = self.prmat_enc(pr_mat)
+            z_x_sym = dist_x_sym.mean
             if self.prmat_enc_type == "finetune":
                 print("infer finetune model: using zx_txt...")
                 # pt_prmat_enc_tmp = load_pretrained_txt_enc(
                 #     "data/Polydis_pretrained/model_master_final.pt", 256, self.device
                 # )
                 # dist_x_sym = pt_prmat_enc_tmp(pr_mat)
-                z_sym = dist_x_sym.mean  # this is z_x_sym
+                z_sym = z_x_sym  # this is z_x_sym
             else:
-                dist_sym = self.diffusion_nn(dist_x_sym)
-                z_sym = dist_sym.mean  # this is z_y_txt
+                z_sym = self.diffusion_nn(z_x_sym)
 
             z = torch.cat([z_chd, z_sym], -1)
 
