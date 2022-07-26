@@ -23,9 +23,12 @@ def load_pretrained_txt_enc(fpath, z_dim, device):
     return prmat_enc
 
 
-def read_split_dict(meter, n_subdiv):
+def read_split_dict(meter, n_subdiv, is_polydis=False):
     """Load train-valid split song ids."""
-    split_dict_path = os.path.join(TRAIN_SPLIT_DIR, "split_dict.pickle")
+    if is_polydis:
+        split_dict_path = os.path.join(POLYDIS_TRAIN_SPLIT_DIR, "split_dict.pickle")
+    else:
+        split_dict_path = os.path.join(TRAIN_SPLIT_DIR, "split_dict.pickle")
     return read_dict(split_dict_path)[(meter, n_subdiv)]
 
 

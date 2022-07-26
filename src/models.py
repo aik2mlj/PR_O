@@ -402,6 +402,7 @@ class PianoReductionVAE(PytorchModel):
             retrieve_midi_from_chd([onehot_to_chd(c) for c in chd], "error_chd.mid")
             retrieve_midi_from_prmat(pr_mat, "error_prmat.mid")
             print("error chord retrieved")
+            exit(0)
 
         # z
         z = torch.cat([z_chd, z_sym], -1)

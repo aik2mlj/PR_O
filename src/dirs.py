@@ -4,6 +4,10 @@ import os
 QUANTIZED_DATA_DIR = "data/LOP_4_bin"
 TRAIN_SPLIT_DIR = "data/train_split"
 
+# polydis data
+POLYDIS_DATA_DIR = "data/polydis/quantized_pop909_4_bin"
+POLYDIS_TRAIN_SPLIT_DIR = "data/polydis/train_split"
+
 # the path to store demo.
 DEMO_FOLDER = "./demo"
 

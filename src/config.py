@@ -5,6 +5,7 @@ import os
 from models import PianoReductionVAE, PianoReductionVAE_contrastive
 from dataset import PianoOrchDataset
 from data_loader import PianoOrchDataLoader, create_data_loaders
+from polydis_dataset.dataset_polydis import AudioMidiDataLoaders, create_data_loaders_polydis
 from constants import AUG_P
 from dirs import RESULT_PATH
 from train import train_model
@@ -41,7 +42,7 @@ FINETUNE_CONFIG = {
     'n_subdiv': 2,
     'parallel': False,
     'load_data_at_start': False,
-    'lr': 1e-5,
+    'lr': 1e-3,
     'beta': 0.1,
     'n_epoch': 30,
 }
@@ -92,7 +93,7 @@ def prepare_model(model_id, model_path=None):
     return model
 
 
-def prepare_data_loaders(test_mode, model_id):
+def prepare_data_loaders(test_mode, model_id, dataset_id):
     if test_mode:
         tv_song_paths = (["bouliane-0", "bouliane-1", "bouliane-2"], ["bouliane-3"])
         train_set, valid_set = PianoOrchDataset.load_with_train_valid_paths(
@@ -105,13 +106,21 @@ def prepare_data_loaders(test_mode, model_id):
             TRAIN_CONFIG['num_workers']
         )
 
-    return create_data_loaders(
-        batch_size=TRAIN_CONFIG['batch_size'],
-        num_workers=TRAIN_CONFIG['num_workers'],
-        meter=TRAIN_CONFIG['meter'],
-        n_subdiv=TRAIN_CONFIG['n_subdiv'],
-        all_x=True if model_id == "finetune_txtenc" else False
-    )
+    if dataset_id == "pr_o":
+        return create_data_loaders(
+            batch_size=TRAIN_CONFIG['batch_size'],
+            num_workers=TRAIN_CONFIG['num_workers'],
+            meter=TRAIN_CONFIG['meter'],
+            n_subdiv=TRAIN_CONFIG['n_subdiv'],
+            all_x=True if model_id == "finetune_txtenc" else False
+        )
+    elif dataset_id == "polydis":
+        return create_data_loaders_polydis(
+            batch_size=TRAIN_CONFIG['batch_size'],
+            num_workers=TRAIN_CONFIG['num_workers'],
+            meter=TRAIN_CONFIG['meter'],
+            n_subdiv=TRAIN_CONFIG['n_subdiv'],
+        )
 
 
 def result_path_folder_path(model_id):
@@ -123,14 +132,18 @@ def result_path_folder_path(model_id):
 
 
 class TrainingCall:
-    def __init__(self, model_id):
+    def __init__(self, model_id, dataset_id="pr_o"):
         assert model_id in [
             "prvae", "prvae_pttxtenc", "prvae_contra", "prvae_pttxtenc_contra",
             "finetune_txtenc"
         ]
+        assert dataset_id in ["pr_o", "polydis"]
 
         self.model_id = model_id
-        self.result_path = result_path_folder_path(model_id)
+        self.dataset_id = dataset_id
+        self.result_path = result_path_folder_path(
+            model_id + "+" + dataset_id if dataset_id == "polydis" else model_id
+        )
 
         # print training setting
         print("====== TrainingCall info:")
@@ -139,6 +152,8 @@ class TrainingCall:
             print(f"prvae_pttxtenc: {PR_PTTXTENC_CONFIG}")
         else:
             print(f"prvae: {PR_CONFIG}")
+        print(f"dataset_id: {dataset_id}")
+        print(f"result_path: {self.result_path}")
         if model_id == "finetune_txtenc":
             print(f"finetune_config: {FINETUNE_CONFIG}")
         else:
@@ -147,7 +162,7 @@ class TrainingCall:
 
     def __call__(self, test_mode, model_path, run_epochs, readme_fn):
         model = prepare_model(self.model_id, model_path)
-        data_loaders = prepare_data_loaders(test_mode, self.model_id)
+        data_loaders = prepare_data_loaders(test_mode, self.model_id, self.dataset_id)
         if self.model_id == "finetune_txtenc":
             train_model(
                 model=model,
